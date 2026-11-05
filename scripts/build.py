@@ -248,30 +248,6 @@ class Pen:
         # one pen stroke: starts a little in and overshoots the first corner on the way back
         return self.line([(x + 6, y + self.j(4)), (x + w, y), (x + w, y + h), (x, y + h), (x, y), (x + 22, y + self.j(4))])
 
-    def circle(self, cx: float, cy: float, r: float) -> str:
-        pts = []
-        for i in range(17):
-            a = -1.9 + i * (2 * math.pi * 1.08) / 16
-            rr = r * (1 + self.rng.uniform(-.07, .07))
-            pts.append((cx + math.cos(a) * rr, cy + math.sin(a) * rr * .9))
-        return smooth(pts)
-
-    def scrawl(self, x: float, y: float, w: float) -> str:
-        """Handwriting-like squiggle standing in for a note."""
-        pts, i = [], 0
-        while i * 7 <= w:
-            pts.append((x + i * 7 + self.j(1.5), y + (5 if i % 2 else -5) * self.rng.uniform(.4, 1.1)))
-            i += 1
-        return smooth(pts)
-
-    def arrow(self, a: tuple[float, float], b: tuple[float, float]) -> tuple[str, str]:
-        mx, my = (a[0] + b[0]) / 2 + self.j(18), (a[1] + b[1]) / 2 + self.j(18)
-        shaft = self.line([a, (mx, my), b], step=40)
-        ang = math.atan2(b[1] - my, b[0] - mx)
-        h = [(b[0] - 14 * math.cos(ang + s), b[1] - 14 * math.sin(ang + s)) for s in (.5, -.5)]
-        head = f"M{h[0][0]:.1f} {h[0][1]:.1f}L{b[0]:.1f} {b[1]:.1f}L{h[1][0]:.1f} {h[1][1]:.1f}"
-        return shaft, head
-
     def blob(self, cx: float, cy: float, rx: float, ry: float, turns: float = 1.15) -> str:
         """A loose, lopsided loop that doesn't quite close: thinking-in-circles."""
         pts, n = [], 20
@@ -288,18 +264,6 @@ class Pen:
         ang = math.atan2(by - py, bx - px)
         h = [(bx - 14 * math.cos(ang + s), by - 14 * math.sin(ang + s)) for s in (.5, -.5)]
         return smooth(pts), f"M{h[0][0]:.1f} {h[0][1]:.1f}L{bx:.1f} {by:.1f}L{h[1][0]:.1f} {h[1][1]:.1f}"
-
-    def star(self, cx: float, cy: float, r: float) -> str:
-        pts = []
-        for i in range(11):
-            a = -math.pi / 2 + i * 4 * math.pi / 5
-            pts.append((cx + math.cos(a) * r + self.j(2), cy + math.sin(a) * r + self.j(2)))
-        return "M" + "L".join(f"{x:.1f} {y:.1f}" for x, y in pts)
-
-    def spiral(self, cx: float, cy: float, r: float) -> str:
-        pts = [(cx + math.cos(a) * r * a / 14 + self.j(1), cy + math.sin(a) * r * a / 14 + self.j(1)) for a in [i * .45 for i in range(32)]]
-        return smooth(pts)
-
 
 # the designed landscape the sketch becomes: a layered ArchiMate view of the same scenario,
 # with the Azure services that run it (official Azure architecture icons, used unmodified).
@@ -344,7 +308,6 @@ RELATIONS = [  # (kind, from, to)
     ("serving", "Azure platform", "Tenant app"), ("serving", "Azure platform", "AI triage"),
     ("serving", "Azure platform", "Work orders"), ("serving", "Azure platform", "Contractor app"),
 ]
-HIGHLIGHT = "AI triage"  # drawn in the accent colour, with its relations
 NODE_DEPTH = 7
 
 
@@ -510,7 +473,6 @@ def hero(t: dict) -> str:
     stroke(a, .6)
     stroke(h, .3)
     sticky(1012, 418, 150, 84, -5, ["costs??"])
-    stroke(pen.star(960, 470, 14), .5, 1.8)
     end = round(at + 2)
     assert end <= 52, f"sketch runs too long: {end}%"
 
@@ -548,11 +510,10 @@ def hero(t: dict) -> str:
     for y in (122, 300):
         b.append(tl.fade(t0, f'<path d="M622 {y}H1180" stroke="{faint}" stroke-width="1.5" stroke-dasharray="2 6" stroke-linecap="round"/>'))
     for i, (kind, src, dst) in enumerate(RELATIONS):
-        tone = accent if HIGHLIGHT in (src, dst) else ink
-        b.append(tl.fade(t0 + 8 + i * .5, connect(kind, src, dst, tone)))
+        b.append(tl.fade(t0 + 8 + i * .5, connect(kind, src, dst, ink)))
     layer_of = {name: next(i for i, (_, cy) in enumerate(LAYERS) if abs(ELEMENTS[name][2] - cy) <= 80) for name in ELEMENTS}
     for i, name in enumerate(ELEMENTS):
-        b.append(tl.appear(t0 + layer_of[name] * 3 + i * .3, element(name, accent if name == HIGHLIGHT else ink, muted, bg)))
+        b.append(tl.appear(t0 + layer_of[name] * 3 + i * .3, element(name, ink, muted, bg)))
     legend_y = 522
     lx, legend = 622, []
     for kind in ("serving", "flow", "triggering", "assignment"):
