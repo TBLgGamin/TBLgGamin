@@ -114,47 +114,53 @@ def svg(w: float, h: float, body: str, title: str, css: str = "") -> str:
 
 
 class Timeline:
-    """One looping sequence. Every element gets its own keyframes on the same clock,
-    so the loop stays in sync: things appear in order, hold, then all fade out together."""
+    """One looping sequence. Every element gets its own keyframes on the same clock, so the
+    loop stays in sync. Elements appear at a given %, hold, and fade out either at their own
+    `until` % or together at the end of the loop."""
 
-    LOOP, HOLD, GONE = 10, 88, 95  # seconds per loop; % where the fade-out starts and ends
+    LOOP, HOLD, GONE = 12, 88, 95  # seconds per loop; % where the final fade starts and ends
 
     def __init__(self) -> None:
         self.css: list[str] = []
 
-    def _rule(self, frames: str) -> str:
+    def rule(self, frames: str) -> str:
         k = f"k{len(self.css)}"
         self.css.append(f"@keyframes {k}{{{frames}}}.{k}{{animation:{k} {self.LOOP}s linear infinite}}")
         return k
 
-    def appear(self, at: float, body: str) -> str:
+    def _out(self, until: float | None) -> tuple[float, float]:
+        return (until, until + 4) if until else (self.HOLD, self.GONE)
+
+    def appear(self, at: float, body: str, until: float | None = None) -> str:
         """Fade and grow in at `at` %."""
-        k = self._rule(
+        hold, gone = self._out(until)
+        k = self.rule(
             f"0%,{at}%{{opacity:0;transform:scale(.6)}}"
-            f"{at + 4}%,{self.HOLD}%{{opacity:1;transform:none}}"
-            f"{self.GONE}%,100%{{opacity:0}}"
+            f"{at + 4}%,{hold}%{{opacity:1;transform:none}}"
+            f"{gone}%,100%{{opacity:0;transform:none}}"
         )
         return f'<g class="{k}" style="transform-box:fill-box;transform-origin:center">{body}</g>'
 
-    def draw(self, start: float, end: float, d: str, stroke: str, width: float = 2) -> str:
+    def draw(self, start: float, end: float, d: str, stroke: str, width: float = 2, until: float | None = None) -> str:
         """Stroke a path from `start` % to `end` %."""
-        k = self._rule(
+        hold, gone = self._out(until)
+        k = self.rule(
             f"0%,{start}%{{stroke-dashoffset:100;opacity:1}}"
-            f"{end}%,{self.HOLD}%{{stroke-dashoffset:0;opacity:1}}"
-            f"{self.GONE}%,100%{{stroke-dashoffset:0;opacity:0}}"
+            f"{end}%,{hold}%{{stroke-dashoffset:0;opacity:1}}"
+            f"{gone}%,100%{{stroke-dashoffset:0;opacity:0}}"
         )
         return (
             f'<path class="{k}" pathLength="100" stroke-dasharray="100" d="{d}" fill="none" '
             f'stroke="{stroke}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round"/>'
         )
 
-    def style(self) -> str:
+    def style(self, reduced: str = "") -> str:
         rise = (
             ".rise{opacity:0;animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:var(--o,0s)}"
             "@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}"
         )
-        # reduced motion: no animation, every element shows its finished state
-        still = "@media (prefers-reduced-motion:reduce){*{animation:none!important;opacity:1!important}}"
+        # reduced motion: no animation; `reduced` picks which still frame is shown
+        still = f"@media (prefers-reduced-motion:reduce){{*{{animation:none!important;opacity:1!important}}{reduced}}}"
         return rise + "".join(self.css) + still
 
 
@@ -202,18 +208,8 @@ def arrow(x: float, y: float, s: float, stroke: str) -> str:
 # ---------------------------------------------------------------- hero (split: words left, animation right)
 
 
-def scribble_path(seed: int, cx: float, cy: float, rx: float, ry: float) -> str:
-    """A hand-drawn tangle: jittered loops joined by a smooth Catmull-Rom curve,
-    ending in a short tail to the right of the box."""
-    rng = random.Random(seed)
-    pts = [(cx - rx, cy + ry * .2)]
-    for i in range(22):
-        a = i * 2.35 + rng.uniform(-.5, .5)
-        r = rng.uniform(.35, 1)
-        drift = (i / 21 - .5) * rx * .5
-        pts.append((cx + drift + math.cos(a) * rx * r * .75, cy + math.sin(a) * ry * r * .8 + rng.uniform(-8, 8)))
-    pts.append((cx + rx * .85, cy + 6))
-    pts.append((cx + rx + 12, cy))
+def smooth(pts: list[tuple[float, float]]) -> str:
+    """Catmull-Rom curve through points, as cubic Beziers."""
     d = f"M{pts[0][0]:.1f} {pts[0][1]:.1f}"
     for i in range(len(pts) - 1):
         p0, p1, p2 = pts[max(i - 1, 0)], pts[i], pts[i + 1]
@@ -224,61 +220,62 @@ def scribble_path(seed: int, cx: float, cy: float, rx: float, ry: float) -> str:
     return d
 
 
-class ArchiMate:
-    """A few ArchiMate 3.2 notation shapes, drawn in one ink colour (colour carries no
-    meaning in ArchiMate). Square corners = structure, rounded corners = behaviour."""
+class Pen:
+    """Hand-drawn strokes: every line wobbles a little, like a pen on a napkin."""
 
-    H = 60
+    def __init__(self, seed: int) -> None:
+        self.rng = random.Random(seed)
 
-    def __init__(self, tl: Timeline, t: dict) -> None:
-        self.tl, self.ink, self.bg = tl, t["ink"], t["bg"]
+    def j(self, v: float = 2.5) -> float:
+        return self.rng.uniform(-v, v)
 
-    def element(self, kind: str, cx: float, cy: float, label: str, at: float, w: float = 164) -> str:
-        ink, bg, h = self.ink, self.bg, self.H
-        x, y = cx - w / 2, cy - h / 2
-        rx = 2 if kind == "component" else 14
-        ix, iy = x + w - 26, y + 9
-        if kind == "component":
-            icon = (
-                f'<rect x="{ix + 4}" y="{iy}" width="14" height="16" fill="none"/>'
-                f'<rect x="{ix}" y="{iy + 3}" width="8" height="4" fill="{bg}"/>'
-                f'<rect x="{ix}" y="{iy + 9.5}" width="8" height="4" fill="{bg}"/>'
-            )
-        elif kind == "service":
-            icon = f'<rect x="{ix - 2}" y="{iy + 3}" width="20" height="10" rx="5" fill="none"/>'
-        else:  # process
-            icon = f'<path fill="none" d="M{ix - 3} {iy + 5}h11v-4l8 7l-8 7v-4h-11z"/>'
-        lw = text_width(label, 17, 500)
-        fits(lw, w - 20, label)
-        body = (
-            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{rx}" fill="{bg}" stroke="{ink}" stroke-width="1.75"/>'
-            f'<g stroke="{ink}" stroke-width="1.5" stroke-linejoin="round">{icon}</g>'
-            + text(label, cx - lw / 2, cy + 14, 17, 500, ink)
-        )
-        return self.tl.appear(at, body)
+    def line(self, pts: list[tuple[float, float]], step: float = 28) -> str:
+        out = []
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+            n = max(1, int(math.hypot(x2 - x1, y2 - y1) / step))
+            out += [(x1 + (x2 - x1) * i / n + self.j(), y1 + (y2 - y1) * i / n + self.j()) for i in range(n)]
+        out.append((pts[-1][0] + self.j(), pts[-1][1] + self.j()))
+        return smooth(out)
 
-    def serving(self, x: float, y1: float, y2: float, at: float) -> str:
-        """Serving: solid line, open arrowhead."""
-        return self.tl.draw(at, at + 3, f"M{x} {y1}V{y2}", self.ink, 1.75) + self.tl.appear(
-            at + 3, f'<path fill="none" stroke="{self.ink}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M{x - 6} {y2 + 10}L{x} {y2}L{x + 6} {y2 + 10}"/>'
-        )
+    def rect(self, x: float, y: float, w: float, h: float) -> str:
+        # one pen stroke: starts a little in and overshoots the first corner on the way back
+        return self.line([(x + 6, y + self.j(4)), (x + w, y), (x + w, y + h), (x, y + h), (x, y), (x + 22, y + self.j(4))])
 
-    def realization(self, x: float, y1: float, y2: float, at: float) -> str:
-        """Realization: dashed line, hollow triangle."""
-        line = f'<path d="M{x} {y1}V{y2 + 11}" stroke="{self.ink}" stroke-width="1.75" stroke-dasharray="5 4"/>'
-        head = f'<path fill="{self.bg}" stroke="{self.ink}" stroke-width="1.75" stroke-linejoin="round" d="M{x} {y2}L{x - 7} {y2 + 11}H{x + 7}Z"/>'
-        return self.tl.appear(at, line + head)
+    def circle(self, cx: float, cy: float, r: float) -> str:
+        pts = []
+        for i in range(17):
+            a = -1.9 + i * (2 * math.pi * 1.08) / 16
+            rr = r * (1 + self.rng.uniform(-.07, .07))
+            pts.append((cx + math.cos(a) * rr, cy + math.sin(a) * rr * .9))
+        return smooth(pts)
 
-    def flow(self, x1: float, x2: float, y: float, at: float) -> str:
-        """Flow: dashed line, filled arrowhead."""
-        line = f'<path d="M{x1} {y}H{x2 - 9}" stroke="{self.ink}" stroke-width="1.75" stroke-dasharray="5 4"/>'
-        head = f'<path fill="{self.ink}" d="M{x2} {y}l-10 -5.5v11z"/>'
-        return self.tl.appear(at, line + head)
+    def scrawl(self, x: float, y: float, w: float) -> str:
+        """Handwriting-like squiggle standing in for a note."""
+        pts, i = [], 0
+        while i * 7 <= w:
+            pts.append((x + i * 7 + self.j(1.5), y + (5 if i % 2 else -5) * self.rng.uniform(.4, 1.1)))
+            i += 1
+        return smooth(pts)
+
+    def arrow(self, a: tuple[float, float], b: tuple[float, float]) -> tuple[str, str]:
+        mx, my = (a[0] + b[0]) / 2 + self.j(18), (a[1] + b[1]) / 2 + self.j(18)
+        shaft = self.line([a, (mx, my), b], step=40)
+        ang = math.atan2(b[1] - my, b[0] - mx)
+        h = [(b[0] - 14 * math.cos(ang + s), b[1] - 14 * math.sin(ang + s)) for s in (.5, -.5)]
+        head = f"M{h[0][0]:.1f} {h[0][1]:.1f}L{b[0]:.1f} {b[1]:.1f}L{h[1][0]:.1f} {h[1][1]:.1f}"
+        return shaft, head
+
+
+# the landscape the sketch becomes: (label, centre x, centre y)
+LANDSCAPE = [
+    ("Portal", 700, 110), ("CRM", 700, 260), ("ERP", 700, 410),
+    ("Data", 1120, 110), ("Identity", 1120, 260), ("Billing", 1120, 410),
+]
 
 
 def hero(t: dict) -> str:
     W, H = 1200, 520
-    muted = t["muted"]
+    ink, muted, accent, bg = t["ink"], t["muted"], t["accent"], t["bg"]
     tl = Timeline()
     b = []
 
@@ -292,31 +289,69 @@ def hero(t: dict) -> str:
         + "</g>"
     )
 
-    # right: a wobbly scribble (the question) becomes an ArchiMate view (the design)
-    b.append(tl.appear(1, text("a question", 636, 170, 18, 500, muted)))
-    b.append(tl.draw(3, 34, scribble_path(seed=4, cx=715, cy=262, rx=80, ry=105), muted, 2.5))
-    b.append(tl.draw(36, 40, "M812 262H838", muted, 2))
-    b.append(tl.appear(40, f'<path fill="{muted}" d="M846 262l-10 -6v12z"/>'))
+    # frame 1 (0-34%): a napkin sketch fills the space, stroke by stroke
+    pen, sk, at = Pen(11), [], 2.0
+    end = 34
 
-    am = ArchiMate(tl, t)
-    col, crm_x = 945, 1120
-    proc_y, svc_y, app_y = 120, 245, 370
-    b.append(am.element("component", col, app_y, "Portal", 41, w=140))
-    b.append(am.element("component", crm_x, app_y, "CRM", 43, w=140))
-    b.append(am.flow(col + 70, crm_x - 70, app_y, 46))
-    b.append(am.realization(col, app_y - 30, svc_y + 30, 49))
-    b.append(am.element("service", col, svc_y, "Request service", 54))
-    b.append(am.serving(col, svc_y - 30, proc_y + 30, 58))
-    b.append(am.element("process", col, proc_y, "Handle request", 62))
-    for label, y in (("BUSINESS", proc_y), ("APPLICATION", svc_y)):
-        b.append(tl.appear(65, text(label, 1190 - text_width(label, 13, 600, 2), y + 5, 13, 600, muted, tracking=2)))
+    def stroke(d: str, dur: float, w: float = 2.2) -> None:
+        nonlocal at
+        sk.append(tl.draw(at, at + dur, d, ink, w, until=end))
+        at += dur * .8
+
+    for x, y, w, h in ((650, 48, 170, 104), (990, 40, 190, 120), (645, 362, 190, 110), (1000, 372, 180, 100)):
+        stroke(pen.rect(x, y, w, h), 2.4)
+        stroke(pen.scrawl(x + 20, y + 40, w * .6), 1.2, 1.8)
+        stroke(pen.scrawl(x + 20, y + 68, w * .4), 1, 1.8)
+    stroke(pen.circle(905, 262, 66), 2.2)
+    stroke(pen.scrawl(872, 266, 60), 1, 1.8)
+    for a, z in (((790, 156), (862, 214)), ((970, 228), (1030, 168)), ((850, 316), (790, 358)), ((1032, 368), (962, 312))):
+        shaft, head = pen.arrow(a, z)
+        stroke(shaft, 1.6)
+        stroke(head, .6)
+    assert at < end - 2, f"sketch runs too long: {at:.0f}%"
+    b.append(f'<g class="sketch">{"".join(sk)}</g>')
+
+    # frame 2 (34-58%): the wena mark grows over the whole space, then settles as the hub
+    wh = 240
+    ww = wh * 694 / 436
+    ease = "animation-timing-function:cubic-bezier(.65,0,.35,1)"
+    k = tl.rule(
+        f"0%,{end}%{{opacity:0;transform:scale(.15) rotate(-10deg);{ease}}}"
+        f"44%,50%{{opacity:1;transform:none;{ease}}}"
+        f"58%,{tl.HOLD}%{{opacity:1;transform:scale(.3)}}"
+        f"{tl.GONE}%,100%{{opacity:0;transform:scale(.3)}}"
+    )
+    b.append(
+        f'<g class="logo {k}" style="transform-box:fill-box;transform-origin:center">'
+        f"{wena_mark(910 - ww / 2, 260 - wh / 2, wh, accent)}</g>"
+    )
+
+    # frame 3 (58%+): the hub connects into an application landscape
+    hub_l, hub_r = 910 - ww * .3 / 2 - 8, 910 + ww * .3 / 2 + 8
+    bw, bh = 130, 52
+    for i, (label, cx, cy) in enumerate(LANDSCAPE):
+        x1, x2 = (hub_l, cx + bw / 2) if cx < 910 else (hub_r, cx - bw / 2)
+        mx = (x1 + x2) / 2
+        b.append(tl.draw(58 + i * 1.5, 64 + i * 1.5, f"M{x1:.1f} 260C{mx:.1f} 260 {mx:.1f} {cy} {x2} {cy}", accent, 2))
+    for i, (label, cx, cy) in enumerate(LANDSCAPE):
+        x, y = cx - bw / 2, cy - bh / 2
+        ix, iy = x + bw - 24, y + 8
+        lw = text_width(label, 17, 500)
+        box = (
+            f'<rect x="{x}" y="{y}" width="{bw}" height="{bh}" rx="2" fill="{bg}" stroke="{ink}" stroke-width="1.75"/>'
+            f'<g stroke="{ink}" stroke-width="1.4"><rect x="{ix + 4}" y="{iy}" width="12" height="14" fill="none"/>'
+            f'<rect x="{ix}" y="{iy + 2.5}" width="7" height="3.5" fill="{bg}"/><rect x="{ix}" y="{iy + 8}" width="7" height="3.5" fill="{bg}"/></g>'
+            + text(label, cx - lw / 2, cy + 12, 17, 500, ink)
+        )
+        b.append(tl.appear(62 + i * 1.5, box))
 
     alt = (
         f"{' '.join(s for s, _ in HEADLINE)} {SUBLINE} "
-        "Animation: a wobbly scribble, a question, turns into an ArchiMate view: the Portal and CRM application "
-        "components, the Request service they realise, and the Handle request business process it serves."
+        "Animation in three frames: a hand-drawn napkin sketch fills the space, the wena logo grows over it, "
+        "then the logo settles as the hub of an application landscape: Portal, CRM, ERP, Data, Identity and Billing."
     )
-    return svg(W, H, "".join(b), alt, tl.style())
+    reduced = ".sketch{display:none}.logo{transform:scale(.3)!important}"
+    return svg(W, H, "".join(b), alt, tl.style(reduced))
 
 
 # ---------------------------------------------------------------- sections
