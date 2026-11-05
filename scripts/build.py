@@ -31,23 +31,33 @@ THEMES = {
 
 # ---------------------------------------------------------------- content
 
-ROLE = "IT consultant & architect"
+ROLE = "IT consultant & developer"
 LINES = [
     "Where technology, organisations and people meet.",
-    "Exploring how people work with autonomous systems.",
+    "Growing towards solution architecture.",
+]
+
+# (period, title, place, state) — state: "done", "now" or "next"
+PATH = [
+    ("2022 – 2026", "Business IT & Management", "Avans · bachelor", "done"),
+    ("2023", "Process improvement", "Weener Plastics", "done"),
+    ("2024", "Development intern", "Growrs", "done"),
+    ("2025 – now", "Student consultant", "VVA Informatisering", "now"),
+    ("2026 – 2028", "Digital Business Transformation", "Open Universiteit · MSc", "now"),
+    ("Next", "Solution architect", "", "next"),
 ]
 
 COMPETENCES = [
-    ("BUILD", ["Software development", "System architecture", "AI & machine learning", "RPA & AI workflows", "DevOps"]),
-    ("PEOPLE", ["Stakeholder management", "Change management", "Training & adoption", "Knowledge management"]),
+    ("BUILD", ["Software development", "System architecture", "AI & machine learning", "RPA & AI workflows", "DevOps & releases"]),
+    ("ORGANISE", ["Process analysis & BPMN", "Requirements analysis", "Stakeholder management", "Change management", "Training & adoption"]),
     ("EXPLORING", ["Human–agent interaction", "Reinforcement learning", "Embedded systems", "Sociology"]),
 ]
 
 PROJECTS = [
-    {"slug": "mtgf", "url": "mtgf.net", "desc": "Magic card search, deck builder and playtest. Usable by people and AI agents."},
-    {"slug": "ordo", "url": "ordo.wena.one", "desc": "Tiling terminal where AI agents run side by side and coordinate."},
-    {"slug": "piikey", "url": "github.com/TBLgGamin/piikey", "desc": "Masks your personal data before it reaches AI chats."},
-    {"slug": "pokeum", "url": "github.com/TBLgGamin/pokeum", "desc": "Scan a Pokémon card, get the exact printing. Self-hosted."},
+    {"slug": "mtgf", "url": "mtgf.net"},
+    {"slug": "ordo", "url": "ordo.wena.one"},
+    {"slug": "piikey", "url": "GitHub"},
+    {"slug": "pokeum", "url": "GitHub"},
 ]
 
 LINKS = [("wena", "wena.one"), ("linkedin", "LinkedIn")]
@@ -180,21 +190,50 @@ def competences(t: dict) -> str:
     return svg(W, H, "".join(b), alt)
 
 
-def project(p: dict, t: dict) -> str:
-    W, H, M = 560, 192, 56
-    ink, muted, accent = t["ink"], t["muted"], t["accent"]
-    x = M + 24
+def path(t: dict) -> str:
+    W, col, y = 1200, 200, 56
+    ink, muted, accent, bg = t["ink"], t["muted"], t["accent"], t["bg"]
+    xs = [8 + i * col for i in range(len(PATH))]
+    last_now = max(i for i, p in enumerate(PATH) if p[3] == "now")
     b = [
-        mark(p["slug"], 0, 0, M, ink),
-        text(p["slug"], x, 36, 32, 700, ink, tracking=-.8),
-        text(p["url"], x, 72, 20, 500, accent),
-        arrow(x + text_width(p["url"], 20, 500) + 8, 70, 12, accent),
+        f'<line x1="{xs[0]}" y1="{y}" x2="{xs[last_now]}" y2="{y}" stroke="{muted}" stroke-width="2"/>',
+        f'<line x1="{xs[last_now]}" y1="{y}" x2="{xs[-1]}" y2="{y}" stroke="{accent}" stroke-width="2" stroke-dasharray="2 8" stroke-linecap="round"/>',
     ]
-    lines = wrap(p["desc"], 22, 400, W - x)
-    assert len(lines) <= 3, f"{p['slug']} description is too long"
-    for i, s in enumerate(lines):
-        b.append(text(s, x, 120 + i * 32, 22, 400, muted))
-    return svg(W, H, "".join(b), f"{p['slug']} ({p['url']}): {p['desc']}")
+    bottom = 0.0
+    for x, (period, title, place, state) in zip(xs, PATH):
+        lx = x - 8
+        if state == "done":
+            b.append(f'<circle cx="{x}" cy="{y}" r="6" fill="{ink}"/>')
+        elif state == "now":
+            b.append(f'<circle cx="{x}" cy="{y}" r="8" fill="{accent}"/>')
+        else:
+            b.append(f'<circle cx="{x}" cy="{y}" r="8" fill="{bg}" stroke="{accent}" stroke-width="2.5"/>')
+        b.append(text(period.upper(), lx, 20, 14, 600, accent if state != "done" else muted, tracking=1.6))
+        ty = 108
+        for s in wrap(title, 22, 600, col - 24):
+            b.append(text(s, lx, ty, 22, 600, accent if state == "next" else ink, tracking=-.3))
+            ty += 30
+        for s in wrap(place, 18, 400, col - 24) if place else []:
+            b.append(text(s, lx, ty + 2, 18, 400, muted))
+            ty += 26
+        bottom = max(bottom, ty)
+    alt = "Path: " + "; ".join(f"{p}: {ti}{', ' + pl if pl else ''}" for p, ti, pl, _ in PATH) + "."
+    return svg(W, bottom - 6, "".join(b), alt)
+
+
+def project(p: dict, t: dict) -> str:
+    W, H, M = 280, 196, 80
+    ink, accent = t["ink"], t["accent"]
+    cx = W / 2
+    nw = text_width(p["slug"], 30, 700, -.6)
+    uw = text_width(p["url"], 20, 500) + 8 + 12
+    b = [
+        mark(p["slug"], cx - M / 2, 0, M, ink),
+        text(p["slug"], cx - nw / 2, 136, 30, 700, ink, tracking=-.6),
+        text(p["url"], cx - uw / 2, 174, 20, 500, accent),
+        arrow(cx - uw / 2 + uw - 12, 172, 12, accent),
+    ]
+    return svg(W, H, "".join(b), f"{p['slug']} ({p['url']})")
 
 
 def link(icon: str, label: str, t: dict) -> str:
@@ -224,6 +263,7 @@ def main() -> None:
     for name, t in THEMES.items():
         t = {**t, "bg": "#FFFFFF" if name == "light" else "#0D1117"}
         (OUT / f"header-{name}.svg").write_text(header(t), encoding="utf-8")
+        (OUT / f"path-{name}.svg").write_text(path(t), encoding="utf-8")
         (OUT / f"competences-{name}.svg").write_text(competences(t), encoding="utf-8")
         for p in PROJECTS:
             (OUT / f"project-{p['slug']}-{name}.svg").write_text(project(p, t), encoding="utf-8")
