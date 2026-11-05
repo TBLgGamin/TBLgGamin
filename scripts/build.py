@@ -54,6 +54,7 @@ PROJECTS = [
     {"slug": "ordo", "line": "A terminal where AI agents team up"},
     {"slug": "piikey", "line": "Keeps your data out of AI chats"},
     {"slug": "pokeum", "line": "Card recognition, fully self-hosted"},
+    {"slug": "readana", "line": "An e-reader that never spoils the plot"},
 ]
 
 LINKS = [("wena", "wena.one"), ("linkedin", "LinkedIn")]
@@ -197,13 +198,33 @@ ORDO_REVERSED = (
     'V55.5A7 7 0 0 1 167.5 48.5Z"/></g>'
 )
 
+# readana "bookmark r" symbol (brand kit): stem ends in a notched ribbon.
+# Reversed use takes the kit's 1-unit-thinner dark cut against irradiation.
+READANA = (
+    '<path fill="{c}" d="M61.33 32.44A4.44 4.44 0 0 1 65.78 28H114.67A4.44 4.44 0 0 1 119.11 32.44V60.33'
+    'A104.44 104.44 0 0 1 190.22 28.09A4.44 4.44 0 0 1 194.67 32.44V76.89A4.44 4.44 0 0 1 190.22 81.53'
+    'A51.11 51.11 0 0 0 143.75 128A4.44 4.44 0 0 1 139.11 132.44H119.11V217.27A4.44 4.44 0 0 1 111.52 220.41'
+    'L90.22 199.11L68.92 220.41A4.44 4.44 0 0 1 61.33 217.27Z"/>'
+)
+READANA_REVERSED = (
+    '<path fill="{c}" d="M61.89 33A4.44 4.44 0 0 1 66.33 28.56H114.11A4.44 4.44 0 0 1 118.56 33V61.73'
+    'A103.89 103.89 0 0 1 190.22 28.65A4.44 4.44 0 0 1 194.67 33V76.33A4.44 4.44 0 0 1 190.22 80.97'
+    'A51.67 51.67 0 0 0 143.19 128A4.44 4.44 0 0 1 138.56 132.44H118.56V217.12A4.44 4.44 0 0 1 110.94 220.23'
+    'L90.22 199.11L69.51 220.23A4.44 4.44 0 0 1 61.89 217.12Z"/>'
+)
+
 
 def wena_mark(x: float, y: float, h: float, fill: str) -> str:
     return f'<svg x="{x:.1f}" y="{y:.1f}" width="{h * 694 / 436:.1f}" height="{h}" viewBox="0 0 694 436"><path fill="{fill}" d="{WENA_D}"/></svg>'
 
 
 def mark(slug: str, x: float, y: float, size: float, fill: str, reversed: bool = False) -> str:
-    vectors = {"pokeum": POKEUM, "piikey": PIIKEY, "ordo": ORDO_REVERSED if reversed else ORDO}
+    vectors = {
+        "pokeum": POKEUM,
+        "piikey": PIIKEY,
+        "ordo": ORDO_REVERSED if reversed else ORDO,
+        "readana": READANA_REVERSED if reversed else READANA,
+    }
     if slug in vectors:
         inner = vectors[slug].format(c=fill)
         return f'<svg x="{x}" y="{y}" width="{size}" height="{size}" viewBox="0 0 256 256">{inner}</svg>'
