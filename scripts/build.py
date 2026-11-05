@@ -46,8 +46,6 @@ INTERESTS = [
     "Change management",
 ]
 
-BUILDING_LINE = "Side projects where people and AI share the work."
-
 PROJECTS = [
     {"slug": "mtgf", "line": "Card search for people and AI agents"},
     {"slug": "ordo", "line": "A terminal where AI agents team up"},
@@ -105,29 +103,57 @@ def fits(width: float, limit: float, what: str) -> None:
     assert width <= limit, f"{what} overflows: {width:.0f} > {limit}"
 
 
-STYLE = """<style>
-.pop{transform-box:fill-box;transform-origin:center;animation:pop .8s cubic-bezier(.34,1.56,.64,1) both;animation-delay:var(--o,0s)}
-@keyframes pop{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:none}}
-.breathe{transform-box:fill-box;transform-origin:center;animation:breathe 4s ease-in-out 1.2s infinite}
-@keyframes breathe{50%{transform:scale(1.05) rotate(-2deg)}}
-.draw{stroke-dasharray:100;stroke-dashoffset:100;animation:draw 1s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:var(--o,0s)}
-@keyframes draw{to{stroke-dashoffset:0}}
-.pulse{stroke-dasharray:4 96;stroke-dashoffset:100;opacity:0;animation:pulse 2.6s linear infinite;animation-delay:var(--o,0s)}
-@keyframes pulse{0%{stroke-dashoffset:100;opacity:1}90%{opacity:1}100%{stroke-dashoffset:0;opacity:0}}
-.spin{animation:spin 24s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.rise{opacity:0;animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:var(--o,0s)}
-@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.pop,.breathe,.spin,.rise{animation:none;opacity:1}.draw{animation:none;stroke-dashoffset:0}.pulse{display:none}}
-</style>"""
-
-
-def svg(w: float, h: float, body: str, title: str, animated: bool = False) -> str:
-    style = STYLE if animated else ""
+def svg(w: float, h: float, body: str, title: str, css: str = "") -> str:
+    style = f"<style>{css}</style>" if css else ""
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.0f} {h:.0f}" width="{w:.0f}" height="{h:.0f}" role="img">'
         f"<title>{escape(title)}</title>{style}{body}</svg>\n"
     )
+
+
+class Timeline:
+    """One looping sequence. Every element gets its own keyframes on the same clock,
+    so the loop stays in sync: things appear in order, hold, then all fade out together."""
+
+    LOOP, HOLD, GONE = 10, 88, 95  # seconds per loop; % where the fade-out starts and ends
+
+    def __init__(self) -> None:
+        self.css: list[str] = []
+
+    def _rule(self, frames: str) -> str:
+        k = f"k{len(self.css)}"
+        self.css.append(f"@keyframes {k}{{{frames}}}.{k}{{animation:{k} {self.LOOP}s linear infinite}}")
+        return k
+
+    def appear(self, at: float, body: str) -> str:
+        """Fade and grow in at `at` %."""
+        k = self._rule(
+            f"0%,{at}%{{opacity:0;transform:scale(.6)}}"
+            f"{at + 4}%,{self.HOLD}%{{opacity:1;transform:none}}"
+            f"{self.GONE}%,100%{{opacity:0}}"
+        )
+        return f'<g class="{k}" style="transform-box:fill-box;transform-origin:center">{body}</g>'
+
+    def draw(self, start: float, end: float, d: str, stroke: str, width: float = 2) -> str:
+        """Stroke a path from `start` % to `end` %."""
+        k = self._rule(
+            f"0%,{start}%{{stroke-dashoffset:100;opacity:1}}"
+            f"{end}%,{self.HOLD}%{{stroke-dashoffset:0;opacity:1}}"
+            f"{self.GONE}%,100%{{stroke-dashoffset:0;opacity:0}}"
+        )
+        return (
+            f'<path class="{k}" pathLength="100" stroke-dasharray="100" d="{d}" fill="none" '
+            f'stroke="{stroke}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round"/>'
+        )
+
+    def style(self) -> str:
+        rise = (
+            ".rise{opacity:0;animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:var(--o,0s)}"
+            "@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}"
+        )
+        # reduced motion: no animation, every element shows its finished state
+        still = "@media (prefers-reduced-motion:reduce){*{animation:none!important;opacity:1!important}}"
+        return rise + "".join(self.css) + still
 
 
 # ---------------------------------------------------------------- marks
@@ -176,54 +202,53 @@ def arrow(x: float, y: float, s: float, stroke: str) -> str:
 
 def hero(t: dict) -> str:
     W, H = 1200, 520
-    ink, muted, faint, accent, bg = t["ink"], t["muted"], t["faint"], t["accent"], t["bg"]
+    ink, muted, accent = t["ink"], t["muted"], t["accent"]
+    tl = Timeline()
     b = []
 
     # left: words
-    x0 = 0
     for i, (s, tone) in enumerate(HEADLINE):
         fits(text_width(s, 64, 700, -2), 560, s)
-        b.append(f'<g class="rise" style="--o:{.2 + i * .1:.1f}s">' + text(s, x0 - 3, 184 + i * 72, 64, 700, t[tone], tracking=-2) + "</g>")
-    sub = wrap(SUBLINE, 24, 400, 500)
+        b.append(f'<g class="rise" style="--o:{.2 + i * .1:.1f}s">' + text(s, -3, 184 + i * 72, 64, 700, t[tone], tracking=-2) + "</g>")
     b.append(
         '<g class="rise" style="--o:.6s">'
-        + "".join(text(s, x0, 390 + i * 36, 24, 400, muted) for i, s in enumerate(sub))
+        + "".join(text(s, 0, 390 + i * 36, 24, 400, muted) for i, s in enumerate(wrap(SUBLINE, 24, 400, 500)))
         + "</g>"
     )
 
-    # right: the wena mark at the centre, the things it builds around it
-    cx, cy = 920, 260
-    orbit = 150
-    b.append(
-        f'<g class="spin" style="transform-origin:{cx}px {cy}px">'
-        f'<circle cx="{cx}" cy="{cy}" r="{orbit}" fill="none" stroke="{faint}" stroke-width="1.5" stroke-dasharray="2 10" stroke-linecap="round"/>'
-        f'<circle cx="{cx + orbit}" cy="{cy}" r="6" fill="{accent}"/>'
-        f'<circle cx="{cx - orbit * .5:.1f}" cy="{cy - orbit * .866:.1f}" r="4" fill="{ink}"/>'
-        f'<circle cx="{cx - orbit * .5:.1f}" cy="{cy + orbit * .866:.1f}" r="4" fill="{muted}"/>'
-        "</g>"
+    # right: a messy question straightens into a solution, and a person starts using it
+    y = 260
+    A, B, C, D, P = (870, y), (970, y - 70), (970, y + 70), (1070, y), (1150, y)
+
+    def label(s: str, cx: float, base: float, fill: str) -> str:
+        return text(s, cx - text_width(s, 18, 500) / 2, base, 18, 500, fill)
+
+    b.append(tl.appear(1, text("a question", 640, 180, 18, 500, muted)))
+    scribble = (
+        f"M640 {y}C660 200 720 210 700 250C680 300 640 270 670 230C700 190 750 230 730 270"
+        f"C715 300 760 300 775 270C785 252 800 {y} 820 {y}L{A[0] - 9} {y}"
     )
+    b.append(tl.draw(3, 28, scribble, muted, 2.5))
+    for (p, q), (s, e) in zip(((A, B), (A, C), (B, D), (C, D)), ((30, 36), (32, 38), (36, 42), (38, 44))):
+        b.append(tl.draw(s, e, f"M{p[0]} {p[1]}L{q[0]} {q[1]}", ink))
+    for n, at in zip((A, B, C, D), (29, 35, 37, 43)):
+        b.append(tl.appear(at, f'<circle cx="{n[0]}" cy="{n[1]}" r="9" fill="{ink}"/>'))
+    b.append(tl.appear(45, label("a solution", B[0], C[1] + 60, muted)))
 
-    M = 64
-    spots = [(690, 70), (1150, 70), (690, 450), (1150, 450)]
-    for i, ((px, py), p) in enumerate(zip(spots, PROJECTS)):
-        sx = cx + (-70 if px < cx else 70)
-        ex = px + (M / 2 + 14 if px < cx else -(M / 2 + 14))
-        d = f"M{sx} {cy}C{sx + (ex - sx) * .6:.0f} {cy} {ex} {cy + (py - cy) * .4:.0f} {ex} {py}"
-        o = .9 + i * .15
-        b.append(f'<path class="draw" style="--o:{o:.2f}s" pathLength="100" d="{d}" fill="none" stroke="{faint}" stroke-width="2" stroke-linecap="round"/>')
-        b.append(f'<path class="pulse" style="--o:{2 + i * .65:.2f}s" pathLength="100" d="{d}" fill="none" stroke="{accent}" stroke-width="4" stroke-linecap="round"/>')
-        b.append(f'<g class="pop" style="--o:{1.3 + i * .15:.2f}s">{mark(p["slug"], px - M / 2, py - M / 2, M, ink)}</g>')
-
-    wh = 120
-    ww = wh * 694 / 436
-    b.append(
-        f'<g class="pop" style="--o:.3s"><g class="breathe">'
-        f'<circle cx="{cx}" cy="{cy}" r="{ww / 2 + 12:.0f}" fill="{bg}"/>'
-        f"{wena_mark(cx - ww / 2, cy - wh / 2, wh, accent)}</g></g>"
+    b.append(tl.draw(48, 54, f"M{D[0] + 9} {y}L{P[0] - 26} {y}", accent))
+    person = (
+        f'<circle cx="{P[0]}" cy="{y - 14}" r="10" fill="{ink}"/>'
+        f'<path fill="{ink}" d="M{P[0] - 20} {y + 22}a20 18 0 0 1 40 0z"/>'
     )
+    b.append(tl.appear(54, person))
+    b.append(tl.appear(58, label("in use", P[0], y + 66, accent)))
+    b.append(tl.draw(60, 64, f"M{P[0] + 14} {y - 44}l7 7l13 -13", accent, 3))
 
-    alt = f"{' '.join(s for s, _ in HEADLINE)} {SUBLINE} Animation: the wena logo connected to mtgf, ordo, piikey and pokeum."
-    return svg(W, H, "".join(b), alt, animated=True)
+    alt = (
+        f"{' '.join(s for s, _ in HEADLINE)} {SUBLINE} "
+        "Animation: a tangled line, a question, straightens into a tidy connected structure, a solution, and a person starts using it."
+    )
+    return svg(W, H, "".join(b), alt, tl.style())
 
 
 # ---------------------------------------------------------------- sections
@@ -252,8 +277,7 @@ def interests(t: dict) -> str:
 
 
 def building(t: dict) -> str:
-    W = 1200
-    return svg(W, 72, eyebrow("BUILDING", 0, 18, t) + text(BUILDING_LINE, 0, 64, 26, 400, t["ink"]), f"Building. {BUILDING_LINE}")
+    return svg(1200, 24, eyebrow("BUILDING", 0, 18, t), "Building")
 
 
 def project(p: dict, t: dict) -> str:

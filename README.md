@@ -16,7 +16,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/building-dark.svg">
-  <img alt="Building: side projects where people and AI share the work." src="assets/building-light.svg" width="100%">
+  <img alt="Building" src="assets/building-light.svg" width="100%">
 </picture>
 
 <a href="https://mtgf.net"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-mtgf-dark.svg"><img alt="mtgf: card search for people and AI agents" src="assets/project-mtgf-light.svg" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/ordo"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-ordo-dark.svg"><img alt="ordo: a terminal where AI agents team up" src="assets/project-ordo-light.svg" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/piikey"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-piikey-dark.svg"><img alt="piikey: keeps your data out of AI chats" src="assets/project-piikey-light.svg" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/pokeum"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-pokeum-dark.svg"><img alt="pokeum: card recognition, fully self-hosted" src="assets/project-pokeum-light.svg" width="23%"></picture></a>
