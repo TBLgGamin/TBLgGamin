@@ -185,14 +185,27 @@ PIIKEY = (
     '<rect x="100" y="186" width="30" height="20" rx="8"/></g>'
 )
 
+# ordo "Orbit o" symbol (brand kit): ring with a notch, one pane stepped out onto it.
+# Reversed use (light on dark) takes the kit's thinner ring and smaller pane against irradiation.
+ORDO = (
+    '<g fill="{c}"><path d="M150 30.45A100 100 0 1 0 225.55 106L180.58 106A57 57 0 1 1 150 75.42Z"/>'
+    '<path d="M167 48H201A7 7 0 0 1 208 55V89A7 7 0 0 1 201 96H167A7 7 0 0 1 160 89V55A7 7 0 0 1 167 48Z"/></g>'
+)
+ORDO_REVERSED = (
+    '<g fill="{c}"><path d="M150 30.45A100 100 0 1 0 225.55 106L181.45 106A57.8 57.8 0 1 1 150 74.55Z"/>'
+    '<path d="M167.5 48.5H200.5A7 7 0 0 1 207.5 55.5V88.5A7 7 0 0 1 200.5 95.5H167.5A7 7 0 0 1 160.5 88.5'
+    'V55.5A7 7 0 0 1 167.5 48.5Z"/></g>'
+)
+
 
 def wena_mark(x: float, y: float, h: float, fill: str) -> str:
     return f'<svg x="{x:.1f}" y="{y:.1f}" width="{h * 694 / 436:.1f}" height="{h}" viewBox="0 0 694 436"><path fill="{fill}" d="{WENA_D}"/></svg>'
 
 
-def mark(slug: str, x: float, y: float, size: float, fill: str) -> str:
-    if slug in ("pokeum", "piikey"):
-        inner = (POKEUM if slug == "pokeum" else PIIKEY).format(c=fill)
+def mark(slug: str, x: float, y: float, size: float, fill: str, reversed: bool = False) -> str:
+    vectors = {"pokeum": POKEUM, "piikey": PIIKEY, "ordo": ORDO_REVERSED if reversed else ORDO}
+    if slug in vectors:
+        inner = vectors[slug].format(c=fill)
         return f'<svg x="{x}" y="{y}" width="{size}" height="{size}" viewBox="0 0 256 256">{inner}</svg>'
     # one-colour PNG marks (black on transparent), recoloured to `fill` with alpha kept
     data = base64.b64encode((SRC / f"{slug}-mark.png").read_bytes()).decode()
@@ -589,7 +602,7 @@ def project(p: dict, t: dict) -> str:
     ink, muted, accent = t["ink"], t["muted"], t["accent"]
     nw = text_width(p["slug"], 30, 700, -.6)
     b = [
-        mark(p["slug"], 0, 0, M, ink),
+        mark(p["slug"], 0, 0, M, ink, reversed=t is THEMES["dark"]),
         text(p["slug"], 0, 126, 30, 700, ink, tracking=-.6),
         arrow(nw + 10, 122, 13, accent),
     ]
