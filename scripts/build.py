@@ -119,7 +119,7 @@ class Timeline:
     loop stays in sync. Elements appear at a given %, hold, and fade out either at their own
     `until` % or together at the end of the loop."""
 
-    LOOP, HOLD, GONE = 16, 88, 95  # seconds per loop; % where the final fade starts and ends
+    LOOP, HOLD, GONE = 18, 88, 95  # seconds per loop; % where the final fade starts and ends
 
     def __init__(self) -> None:
         self.css: list[str] = []
@@ -301,39 +301,56 @@ class Pen:
         return smooth(pts)
 
 
-# the designed landscape the sketch becomes: a layered ArchiMate view.
-# name: (kind, centre x, centre y, width)
-LAYERS = [("BUSINESS", 90), ("APPLICATION", 245), ("TECHNOLOGY", 405)]
+# the designed landscape the sketch becomes: a layered ArchiMate view of the same scenario,
+# with the Azure services that run it (official Azure architecture icons, used unmodified).
+AZURE = SRC / "azure"
+_azure_uses = 0
+
+
+def azure_icon(slug: str, x: float, y: float, size: float) -> str:
+    """Embed an Azure icon as-is; only its ids are made unique within the page."""
+    global _azure_uses
+    _azure_uses += 1
+    src = (AZURE / f"{slug}.svg").read_text(encoding="utf-8")
+    view = re.search(r'viewBox="([^"]+)"', src).group(1)
+    inner = re.search(r"<svg[^>]*>(.*)</svg>", src, re.S).group(1)
+    for i in set(re.findall(r'id="([^"]+)"', inner)):
+        inner = inner.replace(f'id="{i}"', f'id="az{_azure_uses}-{i}"').replace(f"#{i})", f"#az{_azure_uses}-{i})")
+    return f'<svg x="{x}" y="{y}" width="{size}" height="{size}" viewBox="{view}">{inner}</svg>'
+
+
+LAYERS = [("BUSINESS", 72), ("APPLICATION", 205), ("TECHNOLOGY", 410)]
+COLS = (682, 826, 970, 1114)
+# name: (kind, centre x, centre y, width, height, Azure icon, Azure service name)
 ELEMENTS = {
-    "Customer": ("actor", 690, 90, 112), "Support": ("process", 830, 90, 112),
-    "Sales": ("process", 970, 90, 112), "Invoicing": ("process", 1110, 90, 112),
-    "Portal": ("component", 690, 200, 112), "AI agent": ("component", 830, 200, 112),
-    "CRM": ("component", 970, 200, 112), "ERP": ("component", 1110, 200, 112),
-    "Identity": ("component", 690, 290, 112), "Data": ("component", 830, 290, 112),
-    "Analytics": ("component", 970, 290, 112), "Billing": ("component", 1110, 290, 112),
-    "Cloud platform": ("node", 760, 405, 252), "Data platform": ("node", 1040, 405, 252),
+    "Tenant": ("actor", COLS[0], 72, 120, 46, None, None),
+    "Report repair": ("process", COLS[1], 72, 120, 46, None, None),
+    "Plan repair": ("process", COLS[2], 72, 120, 46, None, None),
+    "Contractor": ("actor", COLS[3], 72, 120, 46, None, None),
+    "Tenant app": ("component", COLS[0], 205, 120, 84, "static-web-apps", "Static Web Apps"),
+    "AI triage": ("component", COLS[1], 205, 120, 84, "openai", "Azure OpenAI"),
+    "Work orders": ("component", COLS[2], 205, 120, 84, "logic-apps", "Logic Apps"),
+    "Contractor app": ("component", COLS[3], 205, 120, 84, "app-service", "App Service"),
+    "Azure platform": ("node", 898, 410, 552, 140, None, None),
 }
+PLATFORM = [("sql-database", "SQL Database"), ("service-bus", "Service Bus"), ("key-vault", "Key Vault"),
+            ("monitor", "Monitor"), ("communication-services", "Comm. Services")]
 RELATIONS = [  # (kind, from, to)
-    ("serving", "Support", "Customer"), ("triggering", "Sales", "Invoicing"),
-    ("serving", "Portal", "Customer"), ("serving", "AI agent", "Support"),
-    ("serving", "CRM", "Sales"), ("serving", "ERP", "Invoicing"),
-    ("flow", "Portal", "AI agent"), ("flow", "AI agent", "CRM"), ("flow", "CRM", "ERP"),
-    ("serving", "Identity", "Portal"), ("serving", "Data", "AI agent"),
-    ("serving", "Analytics", "CRM"), ("flow", "ERP", "Billing"), ("flow", "Data", "Analytics"),
-    ("serving", "Cloud platform", "Identity"), ("serving", "Cloud platform", "Data"),
-    ("serving", "Data platform", "Analytics"), ("serving", "Data platform", "Billing"),
+    ("assignment", "Tenant", "Report repair"), ("triggering", "Report repair", "Plan repair"),
+    ("assignment", "Contractor", "Plan repair"),
+    ("serving", "Tenant app", "Tenant"), ("serving", "AI triage", "Report repair"),
+    ("serving", "Work orders", "Plan repair"), ("serving", "Contractor app", "Contractor"),
+    ("flow", "Tenant app", "AI triage"), ("flow", "AI triage", "Work orders"), ("flow", "Work orders", "Contractor app"),
+    ("serving", "Azure platform", "Tenant app"), ("serving", "Azure platform", "AI triage"),
+    ("serving", "Azure platform", "Work orders"), ("serving", "Azure platform", "Contractor app"),
 ]
-HIGHLIGHT = "AI agent"  # drawn in the accent colour, with its relations
-EH, NH = 46, 50  # element / node height
+HIGHLIGHT = "AI triage"  # drawn in the accent colour, with its relations
+NODE_DEPTH = 7
 
 
-def _height(kind: str) -> float:
-    return NH if kind == "node" else EH
-
-
-def relation(kind: str, x1: float, y1: float, x2: float, y2: float, ink: str, bg: str) -> str:
+def relation(kind: str, x1: float, y1: float, x2: float, y2: float, ink: str) -> str:
     """ArchiMate relation between two points. serving: solid + open head; flow: dashed + filled
-    head; triggering: solid + filled head."""
+    head; triggering: solid + filled head; assignment: dot at the source + filled head."""
     ang = math.atan2(y2 - y1, x2 - x1)
     ux, uy = math.cos(ang), math.sin(ang)
     back = (x2 - 10 * ux, y2 - 10 * uy)
@@ -342,61 +359,79 @@ def relation(kind: str, x1: float, y1: float, x2: float, y2: float, ink: str, bg
     end = back if filled else (x2, y2)
     dash = ' stroke-dasharray="5 4"' if kind == "flow" else ""
     out = f'<path d="M{x1:.1f} {y1:.1f}L{end[0]:.1f} {end[1]:.1f}" stroke="{ink}" stroke-width="1.6"{dash}/>'
+    if kind == "assignment":
+        out += f'<circle cx="{x1:.1f}" cy="{y1:.1f}" r="3.5" fill="{ink}"/>'
     wings = f"M{wing[0][0]:.1f} {wing[0][1]:.1f}L{x2:.1f} {y2:.1f}L{wing[1][0]:.1f} {wing[1][1]:.1f}"
     if filled:
         return out + f'<path fill="{ink}" d="{wings}Z"/>'
     return out + f'<path fill="none" stroke="{ink}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="{wings}"/>'
 
 
-def connect(kind: str, src: str, dst: str, ink: str, bg: str) -> str:
-    sk, sx, sy, sw = ELEMENTS[src]
-    dk, dx, dy, dw = ELEMENTS[dst]
+def connect(kind: str, src: str, dst: str, ink: str) -> str:
+    sk, sx, sy, sw, sh, *_ = ELEMENTS[src]
+    dk, dx, dy, dw, dh, *_ = ELEMENTS[dst]
     if abs(sy - dy) < 1:  # same row: side to side
         s = 1 if dx > sx else -1
-        return relation(kind, sx + s * sw / 2, sy, dx - s * dw / 2, dy, ink, bg)
-    x = dx if sk == "node" else sx  # nodes span several components: drop straight onto the target
+        return relation(kind, sx + s * sw / 2, sy, dx - s * dw / 2, dy, ink)
+    x = dx if sk == "node" else sx  # the node spans every component: drop straight onto the target
     s = 1 if dy > sy else -1
-    return relation(kind, x, sy + s * _height(sk) / 2, x, dy - s * _height(dk) / 2, ink, bg)
+    top = NODE_DEPTH if sk == "node" else 0
+    return relation(kind, x, sy + s * (sh / 2 + top), x, dy - s * dh / 2, ink)
 
 
-def element(name: str, ink: str, bg: str) -> str:
-    kind, cx, cy, w = ELEMENTS[name]
-    h = _height(kind)
+def element(name: str, ink: str, muted: str, bg: str) -> str:
+    kind, cx, cy, w, h, az, az_name = ELEMENTS[name]
     x, y = cx - w / 2, cy - h / 2
-    ix, iy = x + w - 24, y + 7
+    ix, iy = x + w - 24, y + 8
+    label_y, size = cy + 12, 15
+    extra = ""
     if kind == "node":
-        d = 7
+        d = NODE_DEPTH
         shape = (
             f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{bg}" stroke="{ink}" stroke-width="1.6"/>'
             f'<path fill="none" stroke="{ink}" stroke-width="1.6" stroke-linejoin="round" d="M{x} {y}l{d} {-d}h{w}v{h}l{-d} {d}M{x + w} {y}l{d} {-d}"/>'
         )
         icon = f'<rect x="{ix}" y="{iy + 3}" width="12" height="10" fill="none"/><path fill="none" d="M{ix} {iy + 3}l3 -3h12v10l-3 3M{ix + 12} {iy + 3}l3 -3"/>'
-    else:
-        rx = 12 if kind == "process" else 2
-        shape = f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{rx}" fill="{bg}" stroke="{ink}" stroke-width="1.6"/>'
-        if kind == "component":
-            icon = (
-                f'<rect x="{ix + 4}" y="{iy}" width="12" height="14" fill="none"/>'
-                f'<rect x="{ix}" y="{iy + 2.5}" width="7" height="3.5" fill="{bg}"/><rect x="{ix}" y="{iy + 8}" width="7" height="3.5" fill="{bg}"/>'
-            )
-        elif kind == "process":
-            icon = f'<path fill="none" d="M{ix - 2} {iy + 4}h10v-4l7 7l-7 7v-4h-10z"/>'
-        else:  # actor: stick figure
-            icon = (
-                f'<circle cx="{ix + 8}" cy="{iy + 3}" r="3" fill="none"/>'
-                f'<path fill="none" d="M{ix + 8} {iy + 6}v6M{ix + 3} {iy + 8.5}h10M{ix + 8} {iy + 12}l-4 5M{ix + 8} {iy + 12}l4 5"/>'
-            )
-    lw = text_width(name, 16, 500)
-    fits(lw, w - 26, name)
+        slot = (w - 40) / len(PLATFORM)
+        for i, (slug, label) in enumerate(PLATFORM):
+            sx = x + 20 + slot * (i + .5)
+            lw = text_width(label, 12, 500)
+            fits(lw, slot - 6, label)
+            extra += azure_icon(slug, sx - 20, y + 42, 40) + text(label, sx - lw / 2, y + 104, 12, 500, muted)
+        return (
+            shape + f'<g stroke="{ink}" stroke-width="1.3" stroke-linejoin="round">{icon}</g>'
+            + text(name, x + 16, y + 26, 15, 600, ink) + extra
+        )
+    rx = 12 if kind == "process" else 2
+    shape = f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{rx}" fill="{bg}" stroke="{ink}" stroke-width="1.6"/>'
+    if kind == "component":
+        icon = (
+            f'<rect x="{ix + 4}" y="{iy}" width="12" height="14" fill="none"/>'
+            f'<rect x="{ix}" y="{iy + 2.5}" width="7" height="3.5" fill="{bg}"/><rect x="{ix}" y="{iy + 8}" width="7" height="3.5" fill="{bg}"/>'
+        )
+    elif kind == "process":
+        icon = f'<path fill="none" d="M{ix - 2} {iy + 4}h10v-4l7 7l-7 7v-4h-10z"/>'
+    else:  # actor: stick figure
+        icon = (
+            f'<circle cx="{ix + 8}" cy="{iy + 3}" r="3" fill="none"/>'
+            f'<path fill="none" d="M{ix + 8} {iy + 6}v6M{ix + 3} {iy + 8.5}h10M{ix + 8} {iy + 12}l-4 5M{ix + 8} {iy + 12}l4 5"/>'
+        )
+    if az:
+        extra = azure_icon(az, x + 10, y + 10, 28)
+        nw = text_width(az_name, 12, 500)
+        fits(nw, w - 12, az_name)
+        extra += text(az_name, cx - nw / 2, y + 74, 12, 500, muted)
+        label_y, size = y + 56, 14
+    lw = text_width(name, size, 600 if az else 500)
+    fits(lw, w - 14, name)
     return (
-        shape
-        + f'<g stroke="{ink}" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round">{icon}</g>'
-        + text(name, cx - lw / 2, cy + 12, 16, 500, ink)
+        shape + f'<g stroke="{ink}" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round">{icon}</g>'
+        + extra + text(name, cx - lw / 2, label_y, size, 600 if az else 500, ink)
     )
 
 
 def hero(t: dict) -> str:
-    W, H = 1200, 520
+    W, H = 1200, 540
     ink, muted, faint, accent, bg = t["ink"], t["muted"], t["faint"], t["accent"], t["bg"]
     tl = Timeline()
     b = []
@@ -404,15 +439,15 @@ def hero(t: dict) -> str:
     # left: words
     for i, (s, tone) in enumerate(HEADLINE):
         fits(text_width(s, 64, 700, -2), 560, s)
-        b.append(f'<g class="rise" style="--o:{.2 + i * .1:.1f}s">' + text(s, -3, 184 + i * 72, 64, 700, t[tone], tracking=-2) + "</g>")
+        b.append(f'<g class="rise" style="--o:{.2 + i * .1:.1f}s">' + text(s, -3, 194 + i * 72, 64, 700, t[tone], tracking=-2) + "</g>")
     b.append(
         '<g class="rise" style="--o:.6s">'
-        + "".join(text(s, 0, 390 + i * 36, 24, 400, muted) for i, s in enumerate(wrap(SUBLINE, 24, 400, 500)))
+        + "".join(text(s, 0, 400 + i * 36, 24, 400, muted) for i, s in enumerate(wrap(SUBLINE, 24, 400, 500)))
         + "</g>"
     )
 
-    # frame 1: unstructured thinking on a napkin. Strokes and handwriting are queued and
-    # timed once we know how long the whole sketch takes.
+    # frame 1: a client's question, thought out loud on a napkin. Strokes and handwriting
+    # are queued and timed once we know how long the whole sketch takes.
     pen, queue, at = Pen(23), [], 2.0
 
     def stroke(d: str, dur: float, w: float = 2.2, rot: tuple[float, float, float] | None = None) -> None:
@@ -420,50 +455,64 @@ def hero(t: dict) -> str:
         queue.append(("draw", at, at + dur, d, w, rot))
         at += dur * .75
 
-    def write(s: str, x: float, y: float, size: float, weight: int = 500, rot: float = 0) -> None:
+    def write(s: str, x: float, y: float, size: float, weight: int = 500, rot: float = 0) -> float:
         nonlocal at
         chars, cx = [], x
         for ch in s:
             if ch != " ":
                 chars.append((at, text(ch, cx, y, size, weight, ink, family="hand")))
-                at += .16
+                at += .11
             cx += text_width(ch, size, weight, family="hand")
         queue.append(("write", rot, x, y, chars))
         at += .3
+        return cx  # where the writing ended
+
+    def strike(x1: float, x2: float, y: float) -> None:
+        stroke(pen.line([(x1 - 4, y), (x2 + 4, y - 3)], step=30), .5, 2.2)
 
     def sticky(x: float, y: float, w: float, h: float, rot: float, lines: list[str]) -> None:
         cx, cy = x + w / 2, y + h / 2
         tape = f'<rect x="{cx - 30}" y="{y - 9}" width="60" height="18" fill="{muted}" fill-opacity=".3"/>'
         queue.append(("raw", at, f'<g transform="rotate({rot} {cx} {cy})">{tape}</g>'))
-        stroke(pen.rect(x, y, w, h), 1.2, 1.8, rot=(rot, cx, cy))
+        stroke(pen.rect(x, y, w, h), 1, 1.8, rot=(rot, cx, cy))
         for i, s in enumerate(lines):
-            write(s, x + 14, y + 40 + i * 32, 27, 600, rot=rot)
+            write(s, x + 14, y + 38 + i * 30, 26, 600, rot=rot)
 
-    stroke(pen.blob(712, 92, 82, 52), 2)
-    write("customers??", 652, 100, 30, 600, rot=-7)
-    write("sync nightly", 806, 70, 24)
-    stroke(pen.line([(802, 62), (918, 58)], step=30), .5, 2)
-    write("realtime!", 830, 104, 27, 600, rot=3)
-    sticky(1010, 40, 150, 100, -6, ["AI agent", "here??"])
-    write("portal / app / both?", 646, 232, 26, rot=4)
-    stroke(pen.blob(818, 236, 40, 24, 1.05), 1, 1.8)
-    a, h = pen.curve([(780, 110), (880, 150), (960, 200), (1040, 205)])
-    stroke(a, 1.2)
+    # the question
+    e1 = write("Repairs take weeks.", 640, 62, 36, 700)
+    e2 = write("How do we fix that?", 640, 102, 36, 700)
+    stroke(pen.line([(636, 116), (max(e1, e2) + 6, 112)], step=40), .6, 2)
+    stroke(pen.line([(646, 124), (max(e1, e2) - 20, 121)], step=40), .5, 1.8)
+    # their ideas, crossed out and corrected
+    e = write("tenants call us", 646, 176, 26)
+    strike(646, e, 168)
+    e = write("app + photo!", e + 18, 178, 28, 700, rot=-3)
+    stroke(pen.blob(e - 62, 168, 80, 28, 1.05), .8, 1.8)
+    sticky(1000, 150, 170, 92, 5, ["AI sorts it", "by urgency?"])
+    a, h = pen.curve([(e + 14, 176), (930, 186), (994, 192)])
+    stroke(a, .7)
     stroke(h, .3)
-    write("CRM", 1052, 214, 34, 700)
-    stroke(pen.line([(1044, 180), (1124, 176), (1128, 228)], step=20), .6, 1.8)
-    stroke(pen.star(982, 300, 16), .7, 1.8)
-    write("??", 1148, 300, 40, 700, rot=10)
-    sticky(652, 330, 160, 104, 7, ["invoices", "manual :("])
-    a, h = pen.curve([(760, 262), (820, 320), (880, 360)])
-    stroke(a, .9)
+    write("planner assigns", 646, 266, 26)
+    e = write("by hand", 646, 300, 26)
+    strike(646, e, 292)
+    write("rules + AI", e + 16, 302, 28, 700, rot=-2)
+    e = write("excel sheet", 870, 286, 26, rot=4)
+    stroke(pen.line([(866, 262), (e + 4, 298)], step=30), .4, 2.2)
+    stroke(pen.line([(866, 298), (e + 4, 264)], step=30), .4, 2.2)
+    a, h = pen.curve([(1080, 250), (1070, 300), (1030, 350)])
+    stroke(a, .6)
     stroke(h, .3)
-    write("who owns the data?", 862, 408, 27, 600, rot=-3)
-    stroke(pen.line([(860, 420), (1060, 410)], step=40), .5, 1.8)
-    stroke(pen.line([(870, 430), (1040, 422)], step=40), .5, 1.8)
-    stroke(pen.spiral(1150, 456, 22), .8, 1.8)
+    e = write("contractor app?", 870, 380, 28, 700)
+    stroke(pen.line([(862, 348), (e + 8, 344), (e + 10, 392)], step=24), .6, 1.8)
+    write("status updates", 646, 380, 26)
+    write("to the tenant!!", 646, 412, 26, 700)
+    a, h = pen.curve([(700, 424), (760, 470), (840, 452)])
+    stroke(a, .6)
+    stroke(h, .3)
+    sticky(1012, 418, 150, 84, -5, ["costs??"])
+    stroke(pen.star(960, 470, 14), .5, 1.8)
     end = round(at + 2)
-    assert end <= 46, f"sketch runs too long: {end}%"
+    assert end <= 52, f"sketch runs too long: {end}%"
 
     sk = []
     for item in queue:
@@ -486,37 +535,42 @@ def hero(t: dict) -> str:
     ease = "animation-timing-function:cubic-bezier(.4,0,.2,1)"
     k = tl.rule(
         f"0%,{end}%{{opacity:0;transform:scale(.92);{ease}}}"
-        f"{end + 9}%,{end + 15}%{{opacity:1;transform:none;{ease}}}"
-        f"{end + 22}%,100%{{opacity:0;transform:scale(1.03)}}"
+        f"{end + 7}%,{end + 12}%{{opacity:1;transform:none;{ease}}}"
+        f"{end + 18}%,100%{{opacity:0;transform:scale(1.03)}}"
     )
-    b.append(f'<g class="logo {k}" style="transform-box:fill-box;transform-origin:center">{wena_mark(910 - ww / 2, 260 - wh / 2, wh, accent)}</g>')
+    b.append(f'<g class="logo {k}" style="transform-box:fill-box;transform-origin:center">{wena_mark(910 - ww / 2, 270 - wh / 2, wh, accent)}</g>')
 
     # frame 3: the designed landscape, built up layer by layer
-    t0 = end + 21
+    t0 = end + 17
     for i, (label, cy) in enumerate(LAYERS):
         lw = text_width(label, 12, 600, 2)
-        b.append(tl.fade(t0 + i * 3, f'<g transform="rotate(-90 616 {cy + lw / 2:.1f})">{text(label, 616, cy + lw / 2, 12, 600, muted, tracking=2)}</g>'))
-    for y in (136, 340):
-        b.append(tl.fade(t0, f'<path d="M634 {y}H1170" stroke="{faint}" stroke-width="1.5" stroke-dasharray="2 6" stroke-linecap="round"/>'))
+        b.append(tl.fade(t0 + i * 3, f'<g transform="rotate(-90 612 {cy + lw / 2:.1f})">{text(label, 612, cy + lw / 2, 12, 600, muted, tracking=2)}</g>'))
+    for y in (122, 300):
+        b.append(tl.fade(t0, f'<path d="M622 {y}H1180" stroke="{faint}" stroke-width="1.5" stroke-dasharray="2 6" stroke-linecap="round"/>'))
     for i, (kind, src, dst) in enumerate(RELATIONS):
         tone = accent if HIGHLIGHT in (src, dst) else ink
-        b.append(tl.fade(t0 + 8 + i * .45, connect(kind, src, dst, tone, bg)))
-    layer_of = {name: next(i for i, (_, cy) in enumerate(LAYERS) if abs(ELEMENTS[name][2] - cy) <= 60) for name in ELEMENTS}
+        b.append(tl.fade(t0 + 8 + i * .5, connect(kind, src, dst, tone)))
+    layer_of = {name: next(i for i, (_, cy) in enumerate(LAYERS) if abs(ELEMENTS[name][2] - cy) <= 80) for name in ELEMENTS}
     for i, name in enumerate(ELEMENTS):
-        b.append(tl.appear(t0 + layer_of[name] * 3 + i * .3, element(name, accent if name == HIGHLIGHT else ink, bg)))
-    legend_y = 480
-    lx, legend = 634, []
-    for kind in ("serving", "flow", "triggering"):
-        legend.append(relation(kind, lx, legend_y, lx + 46, legend_y, muted, bg) + text(kind, lx + 56, legend_y + 5, 14, 500, muted))
-        lx += 56 + text_width(kind, 14, 500) + 32
-    b.append(tl.fade(t0 + 18, "".join(legend)))
-    assert t0 + 22 < tl.HOLD, "landscape starts too late"
+        b.append(tl.appear(t0 + layer_of[name] * 3 + i * .3, element(name, accent if name == HIGHLIGHT else ink, muted, bg)))
+    legend_y = 522
+    lx, legend = 622, []
+    for kind in ("serving", "flow", "triggering", "assignment"):
+        legend.append(relation(kind, lx, legend_y, lx + 40, legend_y, muted) + text(kind, lx + 50, legend_y + 5, 14, 500, muted))
+        lx += 50 + text_width(kind, 14, 500) + 26
+    fits(lx, 1210, "legend")
+    b.append(tl.fade(t0 + 16, "".join(legend)))
+    assert t0 + 18 < tl.HOLD, "landscape starts too late"
 
     alt = (
         f"{' '.join(s for s, _ in HEADLINE)} {SUBLINE} "
-        "Animation in three frames: messy napkin notes with sticky notes and tape ('customers??', 'AI agent here??', "
-        "'who owns the data?'), then the wena logo, then a layered ArchiMate landscape: business processes served by "
-        "application components, including an AI agent, running on two technology platforms."
+        "Animation in three frames. First a napkin sketch of a client question, 'Repairs take weeks. How do we fix that?', "
+        "with ideas scribbled and crossed out: tenants calling becomes an app with a photo, AI sorts by urgency, the "
+        "planner's excel sheet is crossed out for rules and AI, a contractor app, status updates to the tenant. Then the "
+        "wena logo. Then the designed ArchiMate landscape: tenant and contractor, the report and plan repair processes, "
+        "served by a tenant app on Static Web Apps, AI triage on Azure OpenAI, work orders on Logic Apps and a "
+        "contractor app on App Service, all on an Azure platform with SQL Database, Service Bus, Key Vault, Monitor "
+        "and Communication Services."
     )
     reduced = ".sketch,.logo{display:none}"
     return svg(W, H, "".join(b), alt, tl.style(reduced))
