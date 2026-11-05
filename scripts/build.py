@@ -493,31 +493,23 @@ def hero(t: dict) -> str:
             sk.append(tl.fade(s, body, until=end))
     b.append(f'<g class="sketch">{"".join(sk)}</g>')
 
-    # frame 2: the wena mark opens up through a growing circle with a small twist, holds
-    # briefly, then twists away as the circle closes
+    # frame 2: the outline of the wena mark is drawn as one smooth line and, the moment it
+    # closes, erased the same way (the line keeps running and its tail catches up)
     wh = 220
     ww = wh * 694 / 436
     a = end + .2 * sec
-    b_in = a + .55 * sec
-    c = b_in + 1.2 * sec
-    d = c + .45 * sec
-    spring = "animation-timing-function:cubic-bezier(.2,.9,.3,1.15)"
-    quick = "animation-timing-function:cubic-bezier(.6,0,.8,.3)"
-    iris = tl.rule(
-        f"0%,{a:.2f}%{{transform:scale(0);{spring}}}"
-        f"{b_in:.2f}%,{c:.2f}%{{transform:scale(1);{quick}}}"
-        f"{d:.2f}%,100%{{transform:scale(0)}}"
-    )
-    spin = tl.rule(
-        f"0%,{a:.2f}%{{opacity:0;transform:rotate(-10deg) scale(1.15);{spring}}}"
-        f"{b_in:.2f}%,{c:.2f}%{{opacity:1;transform:none;{quick}}}"
-        f"{d:.2f}%,100%{{opacity:0;transform:rotate(8deg) scale(.85)}}"
+    drawn = a + 1.1 * sec
+    d = drawn + .9 * sec
+    ease = "animation-timing-function:cubic-bezier(.65,0,.35,1)"
+    k = tl.rule(
+        f"0%,{a:.2f}%{{stroke-dashoffset:100;{ease}}}"
+        f"{drawn:.2f}%{{stroke-dashoffset:0;{ease}}}"
+        f"{d:.2f}%,100%{{stroke-dashoffset:-100}}"
     )
     b.append(
-        f'<mask id="iris"><circle class="{iris}" cx="910" cy="270" r="230" fill="#fff" '
-        'style="transform-box:fill-box;transform-origin:center"/></mask>'
-        f'<g class="logo {spin}" mask="url(#iris)" style="transform-box:fill-box;transform-origin:center">'
-        f"{wena_mark(910 - ww / 2, 270 - wh / 2, wh, accent)}</g>"
+        f'<svg class="logo" x="{910 - ww / 2:.1f}" y="{270 - wh / 2:.1f}" width="{ww:.1f}" height="{wh}" viewBox="0 0 694 436" overflow="visible">'
+        f'<path class="{k}" d="{WENA_D}" pathLength="100" stroke-dasharray="100 100" fill="none" stroke="{accent}" '
+        'stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>'
     )
 
     # frame 3: the designed landscape, built up layer by layer
