@@ -12,6 +12,7 @@ CSS animation inside the SVG does play, and stops for visitors who prefer reduce
 from __future__ import annotations
 
 import base64
+import hashlib
 import math
 import random
 import re
@@ -433,6 +434,20 @@ def main() -> None:
             (OUT / f"link-{icon}-{name}.svg").write_text(link(icon, label, t), encoding="utf-8")
     for f in sorted(OUT.glob("*.svg")):
         print(f"{f.stat().st_size / 1024:6.1f} KB  {f.name}")
+    stamp_readme()
+
+
+def stamp_readme() -> None:
+    """Browsers and GitHub's image proxy cache README images by URL, so a changed SVG under the
+    same name keeps showing the old one. Add a content hash to every asset URL in README.md."""
+    readme = ROOT.parent / "README.md"
+
+    def stamp(m: re.Match) -> str:
+        digest = hashlib.sha256((OUT / m.group(1)).read_bytes()).hexdigest()[:8]
+        return f"assets/{m.group(1)}?v={digest}"
+
+    md = readme.read_text(encoding="utf-8")
+    readme.write_text(re.sub(r"assets/([\w-]+\.svg)(?:\?v=\w+)?", stamp, md), encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":
