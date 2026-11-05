@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.06d919a3.svg">
-  <img alt="I connect people, processes and systems. IT consultant and developer, growing into solution architecture." src="assets/hero-light.21aee8d9.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.f89388a2.svg">
+  <img alt="I connect people, processes and systems. IT consultant and developer, growing into solution architecture." src="assets/hero-light.2dfad0c1.svg" width="100%">
 </picture>
 
 <a href="https://wena.one"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/link-wena-dark.49e0a385.svg"><img alt="wena.one" src="assets/link-wena-light.1e2b8db3.svg" height="28"></picture></a>&emsp;&emsp;<a href="https://www.linkedin.com/in/wessel-van-der-vlugt-351213254/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/link-linkedin-dark.61eca0a9.svg"><img alt="LinkedIn" src="assets/link-linkedin-light.9977dcfb.svg" height="28"></picture></a>

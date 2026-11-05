@@ -493,22 +493,30 @@ def hero(t: dict) -> str:
             sk.append(tl.fade(s, body, until=end))
     b.append(f'<g class="sketch">{"".join(sk)}</g>')
 
-    # frame 2: the outline of the wena mark is drawn as one smooth line and, the moment it
-    # closes, erased the same way (the line keeps running and its tail catches up)
+    # frame 2: the outline of the wena mark is drawn as one smooth line, filled in, and then
+    # erased the same way it was drawn (the fill lifts and the line's tail catches up)
     wh = 220
     ww = wh * 694 / 436
     a = end + .2 * sec
     drawn = a + 1.1 * sec
-    d = drawn + .9 * sec
+    filled = drawn + .35 * sec
+    erase = filled + .45 * sec
+    d = erase + .9 * sec
     ease = "animation-timing-function:cubic-bezier(.65,0,.35,1)"
-    k = tl.rule(
+    line = tl.rule(
         f"0%,{a:.2f}%{{stroke-dashoffset:100;{ease}}}"
-        f"{drawn:.2f}%{{stroke-dashoffset:0;{ease}}}"
+        f"{drawn:.2f}%,{erase:.2f}%{{stroke-dashoffset:0;{ease}}}"
         f"{d:.2f}%,100%{{stroke-dashoffset:-100}}"
+    )
+    fill = tl.rule(
+        f"0%,{drawn:.2f}%{{opacity:0;{ease}}}"
+        f"{filled:.2f}%,{erase:.2f}%{{opacity:1;{ease}}}"
+        f"{erase + .35 * sec:.2f}%,100%{{opacity:0}}"
     )
     b.append(
         f'<svg class="logo" x="{910 - ww / 2:.1f}" y="{270 - wh / 2:.1f}" width="{ww:.1f}" height="{wh}" viewBox="0 0 694 436" overflow="visible">'
-        f'<path class="{k}" d="{WENA_D}" pathLength="100" stroke-dasharray="100 100" fill="none" stroke="{accent}" '
+        f'<path class="{fill}" d="{WENA_D}" fill="{accent}"/>'
+        f'<path class="{line}" d="{WENA_D}" pathLength="100" stroke-dasharray="100 100" fill="none" stroke="{accent}" '
         'stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>'
     )
 
