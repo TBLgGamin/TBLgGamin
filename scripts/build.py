@@ -119,7 +119,7 @@ class Timeline:
     loop stays in sync. Elements appear at a given %, hold, and fade out either at their own
     `until` % or together at the end of the loop."""
 
-    LOOP, HOLD, GONE = 18, 88, 95  # seconds per loop; % where the final fade starts and ends
+    LOOP, HOLD, GONE = 22, 92, 97  # seconds per loop; % where the final fade starts and ends
 
     def __init__(self) -> None:
         self.css: list[str] = []
@@ -474,8 +474,9 @@ def hero(t: dict) -> str:
     stroke(a, .6)
     stroke(h, .3)
     sticky(1012, 418, 150, 84, -5, ["costs??"])
-    end = round(at + 2)
-    assert end <= 52, f"sketch runs too long: {end}%"
+    sec = 100 / tl.LOOP  # % of the loop per second
+    end = round(at + 1.6 * sec, 2)  # the finished sketch stays up for 1.6 s before it fades
+    assert end <= 60, f"sketch runs too long: {end}%"
 
     sk = []
     for item in queue:
@@ -492,19 +493,35 @@ def hero(t: dict) -> str:
             sk.append(tl.fade(s, body, until=end))
     b.append(f'<g class="sketch">{"".join(sk)}</g>')
 
-    # frame 2: the wena mark fades in large over the sketch, holds, and fades away
+    # frame 2: the wena mark opens up through a growing circle with a small twist, holds
+    # briefly, then twists away as the circle closes
     wh = 220
     ww = wh * 694 / 436
-    ease = "animation-timing-function:cubic-bezier(.4,0,.2,1)"
-    k = tl.rule(
-        f"0%,{end}%{{opacity:0;transform:scale(.92);{ease}}}"
-        f"{end + 7}%,{end + 12}%{{opacity:1;transform:none;{ease}}}"
-        f"{end + 18}%,100%{{opacity:0;transform:scale(1.03)}}"
+    a = end + .2 * sec
+    b_in = a + .55 * sec
+    c = b_in + 1.2 * sec
+    d = c + .45 * sec
+    spring = "animation-timing-function:cubic-bezier(.2,.9,.3,1.15)"
+    quick = "animation-timing-function:cubic-bezier(.6,0,.8,.3)"
+    iris = tl.rule(
+        f"0%,{a:.2f}%{{transform:scale(0);{spring}}}"
+        f"{b_in:.2f}%,{c:.2f}%{{transform:scale(1);{quick}}}"
+        f"{d:.2f}%,100%{{transform:scale(0)}}"
     )
-    b.append(f'<g class="logo {k}" style="transform-box:fill-box;transform-origin:center">{wena_mark(910 - ww / 2, 270 - wh / 2, wh, accent)}</g>')
+    spin = tl.rule(
+        f"0%,{a:.2f}%{{opacity:0;transform:rotate(-10deg) scale(1.15);{spring}}}"
+        f"{b_in:.2f}%,{c:.2f}%{{opacity:1;transform:none;{quick}}}"
+        f"{d:.2f}%,100%{{opacity:0;transform:rotate(8deg) scale(.85)}}"
+    )
+    b.append(
+        f'<mask id="iris"><circle class="{iris}" cx="910" cy="270" r="230" fill="#fff" '
+        'style="transform-box:fill-box;transform-origin:center"/></mask>'
+        f'<g class="logo {spin}" mask="url(#iris)" style="transform-box:fill-box;transform-origin:center">'
+        f"{wena_mark(910 - ww / 2, 270 - wh / 2, wh, accent)}</g>"
+    )
 
     # frame 3: the designed landscape, built up layer by layer
-    t0 = end + 17
+    t0 = d + .3 * sec
     for i, (label, cy) in enumerate(LAYERS):
         lw = text_width(label, 12, 600, 2)
         b.append(tl.fade(t0 + i * 3, f'<g transform="rotate(-90 612 {cy + lw / 2:.1f})">{text(label, 612, cy + lw / 2, 12, 600, muted, tracking=2)}</g>'))
