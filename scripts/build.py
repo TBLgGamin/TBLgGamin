@@ -3,6 +3,7 @@
 Flat and free-form: type, space and one accent. No cards, borders, gradients or shadows.
 Text is converted to outlines because GitHub shows SVGs as <img>, which cannot load fonts.
 Links inside an SVG never work there, so every clickable thing is its own image.
+CSS animation inside the SVG does play, and stops for visitors who prefer reduced motion.
 
     pip install fonttools brotli
     python scripts/build.py
@@ -25,39 +26,34 @@ SRC = ROOT / "src"
 OUT = ROOT.parent / "assets"
 
 THEMES = {
-    "light": {"ink": "#0A0A0A", "muted": "#737373", "accent": "#6F49B1"},
-    "dark": {"ink": "#FAFAFA", "muted": "#A1A1A1", "accent": "#D6C9F9"},
+    "light": {"ink": "#0A0A0A", "muted": "#737373", "faint": "#D4D4D4", "accent": "#6F49B1", "bg": "#FFFFFF"},
+    "dark": {"ink": "#FAFAFA", "muted": "#A1A1A1", "faint": "#3A3A3A", "accent": "#D6C9F9", "bg": "#0D1117"},
 }
 
 # ---------------------------------------------------------------- content
 
-ROLE = "IT consultant & developer"
-LINES = [
-    "Where technology, organisations and people meet.",
-    "Growing towards solution architecture.",
+NAME = "WESSEL VAN DER VLUGT"
+HEADLINE = [("I connect people,", "ink"), ("processes and", "ink"), ("systems.", "accent")]
+SUBLINE = "IT consultant and developer, growing into solution architecture."
+
+INTERESTS = [
+    "Human-agent interaction",
+    "Application landscapes",
+    "Enterprise architecture",
+    "AI & machine learning",
+    "Reinforcement learning",
+    "Embedded systems",
+    "Sociology",
+    "Change management",
 ]
 
-# (period, title, place, state) — state: "done", "now" or "next"
-PATH = [
-    ("2022 – 2026", "Business IT & Management", "Avans · bachelor", "done"),
-    ("2023", "Process improvement", "Weener Plastics", "done"),
-    ("2024", "Development intern", "Growrs", "done"),
-    ("2025 – now", "Student consultant", "VVA Informatisering", "now"),
-    ("2026 – 2028", "Digital Business Transformation", "Open Universiteit · MSc", "now"),
-    ("Next", "Solution architect", "", "next"),
-]
-
-COMPETENCES = [
-    ("BUILD", ["Software development", "System architecture", "AI & machine learning", "RPA & AI workflows", "DevOps & releases"]),
-    ("ORGANISE", ["Process analysis & BPMN", "Requirements analysis", "Stakeholder management", "Change management", "Training & adoption"]),
-    ("EXPLORING", ["Human–agent interaction", "Reinforcement learning", "Embedded systems", "Sociology"]),
-]
+BUILDING_LINE = "Side projects where people and AI share the work."
 
 PROJECTS = [
-    {"slug": "mtgf", "url": "mtgf.net"},
-    {"slug": "ordo", "url": "ordo.wena.one"},
-    {"slug": "piikey", "url": "GitHub"},
-    {"slug": "pokeum", "url": "GitHub"},
+    {"slug": "mtgf", "line": "Card search for people and AI agents"},
+    {"slug": "ordo", "line": "A terminal where AI agents team up"},
+    {"slug": "piikey", "line": "Keeps your data out of AI chats"},
+    {"slug": "pokeum", "line": "Card recognition, fully self-hosted"},
 ]
 
 LINKS = [("wena", "wena.one"), ("linkedin", "LinkedIn")]
@@ -110,10 +106,28 @@ def fits(width: float, limit: float, what: str) -> None:
     assert width <= limit, f"{what} overflows: {width:.0f} > {limit}"
 
 
-def svg(w: float, h: float, body: str, title: str) -> str:
+STYLE = """<style>
+.pop{transform-box:fill-box;transform-origin:center;animation:pop .8s cubic-bezier(.34,1.56,.64,1) both;animation-delay:var(--o,0s)}
+@keyframes pop{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:none}}
+.breathe{transform-box:fill-box;transform-origin:center;animation:breathe 4s ease-in-out 1.2s infinite}
+@keyframes breathe{50%{transform:scale(1.05) rotate(-2deg)}}
+.draw{stroke-dasharray:100;stroke-dashoffset:100;animation:draw 1s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:var(--o,0s)}
+@keyframes draw{to{stroke-dashoffset:0}}
+.pulse{stroke-dasharray:4 96;stroke-dashoffset:100;opacity:0;animation:pulse 2.6s linear infinite;animation-delay:var(--o,0s)}
+@keyframes pulse{0%{stroke-dashoffset:100;opacity:1}90%{opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+.spin{animation:spin 24s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rise{opacity:0;animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:var(--o,0s)}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.pop,.breathe,.spin,.rise{animation:none;opacity:1}.draw{animation:none;stroke-dashoffset:0}.pulse{display:none}}
+</style>"""
+
+
+def svg(w: float, h: float, body: str, title: str, animated: bool = False) -> str:
+    style = STYLE if animated else ""
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.0f} {h:.0f}" width="{w:.0f}" height="{h:.0f}" role="img">'
-        f"<title>{escape(title)}</title>{body}</svg>\n"
+        f"<title>{escape(title)}</title>{style}{body}</svg>\n"
     )
 
 
@@ -133,7 +147,7 @@ PIIKEY = (
 
 
 def wena_mark(x: float, y: float, h: float, fill: str) -> str:
-    return f'<svg x="{x}" y="{y}" width="{h * 694 / 436:.1f}" height="{h}" viewBox="0 0 694 436"><path fill="{fill}" d="{WENA_D}"/></svg>'
+    return f'<svg x="{x:.1f}" y="{y:.1f}" width="{h * 694 / 436:.1f}" height="{h}" viewBox="0 0 694 436"><path fill="{fill}" d="{WENA_D}"/></svg>'
 
 
 def mark(slug: str, x: float, y: float, size: float, fill: str) -> str:
@@ -143,97 +157,121 @@ def mark(slug: str, x: float, y: float, size: float, fill: str) -> str:
     # one-colour PNG marks (black on transparent), recoloured to `fill` with alpha kept
     data = base64.b64encode((SRC / f"{slug}-mark.png").read_bytes()).decode()
     r, g, b = (int(fill[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    fid = f"ink-{slug}"
     return (
-        f'<filter id="ink"><feColorMatrix type="matrix" values="0 0 0 0 {r:.3f}  0 0 0 0 {g:.3f}  0 0 0 0 {b:.3f}  0 0 0 1 0"/></filter>'
-        f'<image x="{x}" y="{y}" width="{size}" height="{size}" filter="url(#ink)" href="data:image/png;base64,{data}"/>'
+        f'<filter id="{fid}"><feColorMatrix type="matrix" values="0 0 0 0 {r:.3f}  0 0 0 0 {g:.3f}  0 0 0 0 {b:.3f}  0 0 0 1 0"/></filter>'
+        f'<image x="{x}" y="{y}" width="{size}" height="{size}" filter="url(#{fid})" href="data:image/png;base64,{data}"/>'
     )
 
 
 def arrow(x: float, y: float, s: float, stroke: str) -> str:
-    """↗ with (x, y) the bottom-left corner of an s×s box."""
+    """Up-right arrow with (x, y) the bottom-left corner of an s by s box."""
     return (
         f'<path fill="none" stroke="{stroke}" stroke-width="{s * .16:.1f}" stroke-linecap="round" stroke-linejoin="round" '
         f'd="M{x} {y}L{x + s} {y - s}M{x + s * .3:.1f} {y - s}H{x + s}V{y - s * .3:.1f}"/>'
     )
 
 
-# ---------------------------------------------------------------- pieces
+# ---------------------------------------------------------------- hero (split: words left, animation right)
 
 
-def header(t: dict) -> str:
-    W, H = 1200, 344
-    ink, muted, accent = t["ink"], t["muted"], t["accent"]
-    b = [
-        wena_mark(0, 24, 40, accent),
-        text("Wessel van der Vlugt", -3, 160, 80, 700, ink, tracking=-2.8),
-        text(ROLE, 0, 216, 32, 500, accent, tracking=-.4),
-    ]
-    fits(text_width("Wessel van der Vlugt", 80, 700, -2.8), W, "name")
-    for i, s in enumerate(LINES):
-        fits(text_width(s, 26, 400), W, "header line")
-        b.append(text(s, 0, 288 + i * 40, 26, 400, muted))
-    return svg(W, H, "".join(b), f"Wessel van der Vlugt, {ROLE}. " + " ".join(LINES))
-
-
-def competences(t: dict) -> str:
-    W, col, size, lead = 1200, 400, 24, 40
-    ink, muted = t["ink"], t["muted"]
+def hero(t: dict) -> str:
+    W, H = 1200, 520
+    ink, muted, faint, accent, bg = t["ink"], t["muted"], t["faint"], t["accent"], t["bg"]
     b = []
-    for c, (label, items) in enumerate(COMPETENCES):
-        x = c * col
-        b.append(text(label, x, 16, 15, 600, muted, tracking=2.4))
-        for i, s in enumerate(items):
-            fits(text_width(s, size, 400), col - 32, s)
-            b.append(text(s, x, 64 + i * lead, size, 400, ink))
-    H = 64 + (max(len(i) for _, i in COMPETENCES) - 1) * lead + 16
-    alt = " ".join(f"{l.title()}: {', '.join(i)}." for l, i in COMPETENCES)
-    return svg(W, H, "".join(b), alt)
+
+    # left: words
+    x0 = 0
+    b.append(f'<g class="rise" style="--o:.1s">{text(NAME, x0, 136, 16, 600, muted, tracking=2.6)}</g>')
+    for i, (s, tone) in enumerate(HEADLINE):
+        fits(text_width(s, 64, 700, -2), 560, s)
+        b.append(f'<g class="rise" style="--o:{.2 + i * .1:.1f}s">' + text(s, x0 - 3, 214 + i * 72, 64, 700, t[tone], tracking=-2) + "</g>")
+    sub = wrap(SUBLINE, 24, 400, 500)
+    b.append(
+        '<g class="rise" style="--o:.6s">'
+        + "".join(text(s, x0, 420 + i * 36, 24, 400, muted) for i, s in enumerate(sub))
+        + "</g>"
+    )
+
+    # right: the wena mark at the centre, the things it builds around it
+    cx, cy = 920, 260
+    orbit = 150
+    b.append(
+        f'<g class="spin" style="transform-origin:{cx}px {cy}px">'
+        f'<circle cx="{cx}" cy="{cy}" r="{orbit}" fill="none" stroke="{faint}" stroke-width="1.5" stroke-dasharray="2 10" stroke-linecap="round"/>'
+        f'<circle cx="{cx + orbit}" cy="{cy}" r="6" fill="{accent}"/>'
+        f'<circle cx="{cx - orbit * .5:.1f}" cy="{cy - orbit * .866:.1f}" r="4" fill="{ink}"/>'
+        f'<circle cx="{cx - orbit * .5:.1f}" cy="{cy + orbit * .866:.1f}" r="4" fill="{muted}"/>'
+        "</g>"
+    )
+
+    M = 64
+    spots = [(690, 70), (1150, 70), (690, 450), (1150, 450)]
+    for i, ((px, py), p) in enumerate(zip(spots, PROJECTS)):
+        sx = cx + (-70 if px < cx else 70)
+        ex = px + (M / 2 + 14 if px < cx else -(M / 2 + 14))
+        d = f"M{sx} {cy}C{sx + (ex - sx) * .6:.0f} {cy} {ex} {cy + (py - cy) * .4:.0f} {ex} {py}"
+        o = .9 + i * .15
+        b.append(f'<path class="draw" style="--o:{o:.2f}s" pathLength="100" d="{d}" fill="none" stroke="{faint}" stroke-width="2" stroke-linecap="round"/>')
+        b.append(f'<path class="pulse" style="--o:{2 + i * .65:.2f}s" pathLength="100" d="{d}" fill="none" stroke="{accent}" stroke-width="4" stroke-linecap="round"/>')
+        b.append(f'<g class="pop" style="--o:{1.3 + i * .15:.2f}s">{mark(p["slug"], px - M / 2, py - M / 2, M, ink)}</g>')
+
+    wh = 120
+    ww = wh * 694 / 436
+    b.append(
+        f'<g class="pop" style="--o:.3s"><g class="breathe">'
+        f'<circle cx="{cx}" cy="{cy}" r="{ww / 2 + 12:.0f}" fill="{bg}"/>'
+        f"{wena_mark(cx - ww / 2, cy - wh / 2, wh, accent)}</g></g>"
+    )
+
+    alt = f"{NAME.title()}. {' '.join(s for s, _ in HEADLINE)} {SUBLINE} Animation: the wena logo connected to mtgf, ordo, piikey and pokeum."
+    return svg(W, H, "".join(b), alt, animated=True)
 
 
-def path(t: dict) -> str:
-    W, col, y = 1200, 200, 56
-    ink, muted, accent, bg = t["ink"], t["muted"], t["accent"], t["bg"]
-    xs = [8 + i * col for i in range(len(PATH))]
-    last_now = max(i for i, p in enumerate(PATH) if p[3] == "now")
-    b = [
-        f'<line x1="{xs[0]}" y1="{y}" x2="{xs[last_now]}" y2="{y}" stroke="{muted}" stroke-width="2"/>',
-        f'<line x1="{xs[last_now]}" y1="{y}" x2="{xs[-1]}" y2="{y}" stroke="{accent}" stroke-width="2" stroke-dasharray="2 8" stroke-linecap="round"/>',
-    ]
-    bottom = 0.0
-    for x, (period, title, place, state) in zip(xs, PATH):
-        lx = x - 8
-        if state == "done":
-            b.append(f'<circle cx="{x}" cy="{y}" r="6" fill="{ink}"/>')
-        elif state == "now":
-            b.append(f'<circle cx="{x}" cy="{y}" r="8" fill="{accent}"/>')
-        else:
-            b.append(f'<circle cx="{x}" cy="{y}" r="8" fill="{bg}" stroke="{accent}" stroke-width="2.5"/>')
-        b.append(text(period.upper(), lx, 20, 14, 600, accent if state != "done" else muted, tracking=1.6))
-        ty = 108
-        for s in wrap(title, 22, 600, col - 24):
-            b.append(text(s, lx, ty, 22, 600, accent if state == "next" else ink, tracking=-.3))
-            ty += 30
-        for s in wrap(place, 18, 400, col - 24) if place else []:
-            b.append(text(s, lx, ty + 2, 18, 400, muted))
-            ty += 26
-        bottom = max(bottom, ty)
-    alt = "Path: " + "; ".join(f"{p}: {ti}{', ' + pl if pl else ''}" for p, ti, pl, _ in PATH) + "."
-    return svg(W, bottom - 6, "".join(b), alt)
+# ---------------------------------------------------------------- sections
+
+
+def eyebrow(label: str, x: float, y: float, t: dict) -> str:
+    return text(label, x, y, 16, 600, t["muted"], tracking=2.6)
+
+
+def interests(t: dict) -> str:
+    W, size, lead, gap = 1200, 36, 56, 22
+    ink, accent = t["ink"], t["accent"]
+    b = [eyebrow("INTERESTED IN", 0, 18, t)]
+    x, y = 0.0, 80
+    slash_w = text_width("/", size, 400)
+    for i, word in enumerate(INTERESTS):
+        w = text_width(word, size, 500, -.6)
+        if x and x + w > W:
+            x, y = 0.0, y + lead
+        b.append(text(word, x, y, size, 500, ink, tracking=-.6))
+        x += w
+        if i < len(INTERESTS) - 1:
+            b.append(text("/", x + gap, y, size, 400, accent))
+            x += gap * 2 + slash_w
+    return svg(W, y + 14, "".join(b), "Interested in: " + ", ".join(INTERESTS) + ".")
+
+
+def building(t: dict) -> str:
+    W = 1200
+    return svg(W, 72, eyebrow("BUILDING", 0, 18, t) + text(BUILDING_LINE, 0, 64, 26, 400, t["ink"]), f"Building. {BUILDING_LINE}")
 
 
 def project(p: dict, t: dict) -> str:
-    W, H, M = 280, 196, 80
-    ink, accent = t["ink"], t["accent"]
-    cx = W / 2
+    W, M = 280, 72
+    ink, muted, accent = t["ink"], t["muted"], t["accent"]
     nw = text_width(p["slug"], 30, 700, -.6)
-    uw = text_width(p["url"], 20, 500) + 8 + 12
     b = [
-        mark(p["slug"], cx - M / 2, 0, M, ink),
-        text(p["slug"], cx - nw / 2, 136, 30, 700, ink, tracking=-.6),
-        text(p["url"], cx - uw / 2, 174, 20, 500, accent),
-        arrow(cx - uw / 2 + uw - 12, 172, 12, accent),
+        mark(p["slug"], 0, 0, M, ink),
+        text(p["slug"], 0, 126, 30, 700, ink, tracking=-.6),
+        arrow(nw + 10, 122, 13, accent),
     ]
-    return svg(W, H, "".join(b), f"{p['slug']} ({p['url']})")
+    lines = wrap(p["line"], 20, 400, W - 24)
+    assert len(lines) <= 2, f"{p['slug']} line is too long"
+    for i, s in enumerate(lines):
+        b.append(text(s, 0, 162 + i * 28, 20, 400, muted))
+    return svg(W, 196, "".join(b), f"{p['slug']}: {p['line']}")
 
 
 def link(icon: str, label: str, t: dict) -> str:
@@ -261,10 +299,9 @@ def main() -> None:
     for old in OUT.glob("*.svg"):
         old.unlink()
     for name, t in THEMES.items():
-        t = {**t, "bg": "#FFFFFF" if name == "light" else "#0D1117"}
-        (OUT / f"header-{name}.svg").write_text(header(t), encoding="utf-8")
-        (OUT / f"path-{name}.svg").write_text(path(t), encoding="utf-8")
-        (OUT / f"competences-{name}.svg").write_text(competences(t), encoding="utf-8")
+        (OUT / f"hero-{name}.svg").write_text(hero(t), encoding="utf-8")
+        (OUT / f"interests-{name}.svg").write_text(interests(t), encoding="utf-8")
+        (OUT / f"building-{name}.svg").write_text(building(t), encoding="utf-8")
         for p in PROJECTS:
             (OUT / f"project-{p['slug']}-{name}.svg").write_text(project(p, t), encoding="utf-8")
         for icon, label in LINKS:
