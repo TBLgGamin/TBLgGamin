@@ -32,7 +32,6 @@ THEMES = {
 
 # ---------------------------------------------------------------- content
 
-NAME = "WESSEL VAN DER VLUGT"
 HEADLINE = [("I connect people,", "ink"), ("processes and", "ink"), ("systems.", "accent")]
 SUBLINE = "IT consultant and developer, growing into solution architecture."
 
@@ -182,14 +181,13 @@ def hero(t: dict) -> str:
 
     # left: words
     x0 = 0
-    b.append(f'<g class="rise" style="--o:.1s">{text(NAME, x0, 136, 16, 600, muted, tracking=2.6)}</g>')
     for i, (s, tone) in enumerate(HEADLINE):
         fits(text_width(s, 64, 700, -2), 560, s)
-        b.append(f'<g class="rise" style="--o:{.2 + i * .1:.1f}s">' + text(s, x0 - 3, 214 + i * 72, 64, 700, t[tone], tracking=-2) + "</g>")
+        b.append(f'<g class="rise" style="--o:{.2 + i * .1:.1f}s">' + text(s, x0 - 3, 184 + i * 72, 64, 700, t[tone], tracking=-2) + "</g>")
     sub = wrap(SUBLINE, 24, 400, 500)
     b.append(
         '<g class="rise" style="--o:.6s">'
-        + "".join(text(s, x0, 420 + i * 36, 24, 400, muted) for i, s in enumerate(sub))
+        + "".join(text(s, x0, 390 + i * 36, 24, 400, muted) for i, s in enumerate(sub))
         + "</g>"
     )
 
@@ -224,7 +222,7 @@ def hero(t: dict) -> str:
         f"{wena_mark(cx - ww / 2, cy - wh / 2, wh, accent)}</g></g>"
     )
 
-    alt = f"{NAME.title()}. {' '.join(s for s, _ in HEADLINE)} {SUBLINE} Animation: the wena logo connected to mtgf, ordo, piikey and pokeum."
+    alt = f"{' '.join(s for s, _ in HEADLINE)} {SUBLINE} Animation: the wena logo connected to mtgf, ordo, piikey and pokeum."
     return svg(W, H, "".join(b), alt, animated=True)
 
 
