@@ -265,6 +265,7 @@ class Pen:
         h = [(bx - 14 * math.cos(ang + s), by - 14 * math.sin(ang + s)) for s in (.5, -.5)]
         return smooth(pts), f"M{h[0][0]:.1f} {h[0][1]:.1f}L{bx:.1f} {by:.1f}L{h[1][0]:.1f} {h[1][1]:.1f}"
 
+
 # the designed landscape the sketch becomes: a layered ArchiMate view of the same scenario,
 # with the Azure services that run it (official Azure architecture icons, used unmodified).
 AZURE = SRC / "azure"
