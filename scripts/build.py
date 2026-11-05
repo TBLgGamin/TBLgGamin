@@ -60,25 +60,25 @@ LINKS = [("wena", "wena.one"), ("linkedin", "LinkedIn")]
 
 # ---------------------------------------------------------------- type
 
-_FONT_PATH = SRC / "space-grotesk-latin-wght-normal.woff2"
-_fonts: dict[int, TTFont] = {}
+_FONTS = {"sans": SRC / "space-grotesk-latin-wght-normal.woff2", "hand": SRC / "caveat.ttf"}
+_fonts: dict[tuple[str, int], TTFont] = {}
 
 
-def _font(weight: int) -> TTFont:
-    if weight not in _fonts:
-        _fonts[weight] = instantiateVariableFont(TTFont(_FONT_PATH), {"wght": weight})
-    return _fonts[weight]
+def _font(weight: int, family: str = "sans") -> TTFont:
+    if (family, weight) not in _fonts:
+        _fonts[family, weight] = instantiateVariableFont(TTFont(_FONTS[family]), {"wght": weight})
+    return _fonts[family, weight]
 
 
-def text_width(s: str, size: float, weight: int = 400, tracking: float = 0) -> float:
-    f = _font(weight)
+def text_width(s: str, size: float, weight: int = 400, tracking: float = 0, family: str = "sans") -> float:
+    f = _font(weight, family)
     cmap, hmtx, upm = f.getBestCmap(), f["hmtx"], f["head"].unitsPerEm
     return sum(hmtx[cmap[ord(c)]][0] for c in s) * size / upm + tracking * max(len(s) - 1, 0)
 
 
-def text(s: str, x: float, y: float, size: float, weight: int, fill: str, tracking: float = 0) -> str:
+def text(s: str, x: float, y: float, size: float, weight: int, fill: str, tracking: float = 0, family: str = "sans") -> str:
     """Outlined text as one <path>; y is the baseline."""
-    f = _font(weight)
+    f = _font(weight, family)
     cmap, hmtx, upm = f.getBestCmap(), f["hmtx"], f["head"].unitsPerEm
     gs = f.getGlyphSet()
     scale = size / upm
@@ -119,7 +119,7 @@ class Timeline:
     loop stays in sync. Elements appear at a given %, hold, and fade out either at their own
     `until` % or together at the end of the loop."""
 
-    LOOP, HOLD, GONE = 12, 88, 95  # seconds per loop; % where the final fade starts and ends
+    LOOP, HOLD, GONE = 16, 88, 95  # seconds per loop; % where the final fade starts and ends
 
     def __init__(self) -> None:
         self.css: list[str] = []
@@ -141,6 +141,12 @@ class Timeline:
             f"{gone}%,100%{{opacity:0;transform:none}}"
         )
         return f'<g class="{k}" style="transform-box:fill-box;transform-origin:center">{body}</g>'
+
+    def fade(self, at: float, body: str, until: float | None = None) -> str:
+        """Fade in at `at` % (quick, no movement: used for handwriting and diagram lines)."""
+        hold, gone = self._out(until)
+        k = self.rule(f"0%,{at:.2f}%{{opacity:0}}{at + .6:.2f}%,{hold}%{{opacity:1}}{gone}%,100%{{opacity:0}}")
+        return f'<g class="{k}">{body}</g>'
 
     def draw(self, start: float, end: float, d: str, stroke: str, width: float = 2, until: float | None = None) -> str:
         """Stroke a path from `start` % to `end` %."""
@@ -267,11 +273,52 @@ class Pen:
         return shaft, head
 
 
-# the landscape the sketch becomes: (label, centre x, centre y)
-LANDSCAPE = [
-    ("Portal", 700, 110), ("CRM", 700, 260), ("ERP", 700, 410),
-    ("Data", 1120, 110), ("Identity", 1120, 260), ("Billing", 1120, 410),
+# the official diagram the sketch becomes: an ArchiMate application cooperation view
+COMPONENTS = {"Portal": (710, 150), "CRM": (910, 150), "ERP": (1110, 150), "Identity": (710, 340), "Data": (910, 340), "Billing": (1110, 340)}
+# (kind, from, to); serving = solid line + open arrowhead, flow = dashed line + filled arrowhead
+RELATIONS = [
+    ("flow", "Portal", "CRM"), ("flow", "CRM", "ERP"), ("serving", "Identity", "Portal"),
+    ("serving", "Data", "CRM"), ("flow", "ERP", "Billing"), ("flow", "Billing", "Data"),
 ]
+BW, BH = 150, 56
+
+
+def relation(kind: str, a: tuple[float, float], b: tuple[float, float], ink: str, bg: str) -> str:
+    (ax, ay), (bx, by) = a, b
+    if ay == by:  # horizontal: leave and enter through the side edges
+        s = 1 if bx > ax else -1
+        x1, y1, x2, y2 = ax + s * BW / 2, ay, bx - s * BW / 2, by
+    else:  # vertical: through top/bottom edges
+        s = 1 if by > ay else -1
+        x1, y1, x2, y2 = ax, ay + s * BH / 2, bx, by - s * BH / 2
+    ang = math.atan2(y2 - y1, x2 - x1)
+    ux, uy = math.cos(ang), math.sin(ang)
+    back = (x2 - 11 * ux, y2 - 11 * uy)
+    wing = [(back[0] - 6 * uy * s2, back[1] + 6 * ux * s2) for s2 in (1, -1)]
+    dash = ' stroke-dasharray="6 4"' if kind == "flow" else ""
+    end = back if kind == "flow" else (x2, y2)
+    line = f'<path d="M{x1} {y1}L{end[0]:.1f} {end[1]:.1f}" stroke="{ink}" stroke-width="1.75"{dash}/>'
+    if kind == "flow":
+        head = f'<path fill="{ink}" d="M{x2} {y2}L{wing[0][0]:.1f} {wing[0][1]:.1f}L{wing[1][0]:.1f} {wing[1][1]:.1f}Z"/>'
+    else:
+        head = (
+            f'<path fill="none" stroke="{ink}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" '
+            f'd="M{wing[0][0]:.1f} {wing[0][1]:.1f}L{x2} {y2}L{wing[1][0]:.1f} {wing[1][1]:.1f}"/>'
+        )
+    return line + head
+
+
+def component(label: str, cx: float, cy: float, ink: str, bg: str) -> str:
+    x, y = cx - BW / 2, cy - BH / 2
+    ix, iy = x + BW - 26, y + 9
+    lw = text_width(label, 18, 500)
+    fits(lw, BW - 24, label)
+    return (
+        f'<rect x="{x}" y="{y}" width="{BW}" height="{BH}" rx="2" fill="{bg}" stroke="{ink}" stroke-width="1.75"/>'
+        f'<g stroke="{ink}" stroke-width="1.4"><rect x="{ix + 4}" y="{iy}" width="13" height="15" fill="none"/>'
+        f'<rect x="{ix}" y="{iy + 2.5}" width="8" height="4" fill="{bg}"/><rect x="{ix}" y="{iy + 8.5}" width="8" height="4" fill="{bg}"/></g>'
+        + text(label, cx - lw / 2, cy + 13, 18, 500, ink)
+    )
 
 
 def hero(t: dict) -> str:
@@ -290,68 +337,105 @@ def hero(t: dict) -> str:
         + "</g>"
     )
 
-    # frame 1 (0-34%): a napkin sketch fills the space, stroke by stroke
-    pen, sk, at = Pen(11), [], 2.0
-    end = 34
+    # frame 1: a napkin sketch with handwritten notes fills the space; strokes and writing
+    # are queued and timed later, once we know how long the whole sketch takes
+    pen, queue, at = Pen(11), [], 2.0
 
     def stroke(d: str, dur: float, w: float = 2.2) -> None:
         nonlocal at
-        sk.append(tl.draw(at, at + dur, d, ink, w, until=end))
-        at += dur * .8
+        queue.append(("draw", at, at + dur, d, w))
+        at += dur * .75
 
-    for x, y, w, h in ((650, 48, 170, 104), (990, 40, 190, 120), (645, 362, 190, 110), (1000, 372, 180, 100)):
-        stroke(pen.rect(x, y, w, h), 2.4)
-        stroke(pen.scrawl(x + 20, y + 40, w * .6), 1.2, 1.8)
-        stroke(pen.scrawl(x + 20, y + 68, w * .4), 1, 1.8)
-    stroke(pen.circle(905, 262, 66), 2.2)
-    stroke(pen.scrawl(872, 266, 60), 1, 1.8)
-    for a, z in (((790, 156), (862, 214)), ((970, 228), (1030, 168)), ((850, 316), (790, 358)), ((1032, 368), (962, 312))):
+    def write(s: str, x: float, y: float, size: float, weight: int = 500, rot: float = 0, room: float | None = None) -> None:
+        nonlocal at
+        if room:
+            fits(text_width(s, size, weight, family="hand"), room, s)
+        chars, cx = [], x
+        for ch in s:
+            if ch != " ":
+                chars.append((at, text(ch, cx, y, size, weight, ink, family="hand")))
+                at += .17
+            cx += text_width(ch, size, weight, family="hand")
+        queue.append(("write", rot, x, y, chars))
+        at += .4
+
+    def box(x: float, y: float, w: float, h: float, title: str, note: str) -> None:
+        stroke(pen.rect(x, y, w, h), 2)
+        write(title, x + 18, y + 44, 34, 600, room=w - 30)
+        write(note, x + 18, y + 80, 25, room=w - 26)
+
+    box(650, 48, 175, 100, "portal", "login? SSO?")
+    box(990, 40, 190, 110, "CRM", "customers + deals")
+    write("sync nightly", 842, 84, 25)
+    stroke(pen.line([(838, 76), (958, 74)], step=30), .6, 2)
+    write("realtime!", 850, 120, 27, 600)
+    stroke(pen.circle(905, 262, 66), 2)
+    write("data", 872, 270, 36, 600)
+    stroke(pen.scrawl(872, 284, 58), .8, 1.6)
+    write("who owns this?", 650, 262, 25, rot=-5)
+    box(645, 362, 190, 110, "ERP", "orders, stock")
+    box(1000, 372, 180, 100, "billing", "still manual :(")
+    # a sticky note taped on
+    queue.append(("raw", at, f'<g transform="rotate(5 1108 262)"><rect x="1080" y="204" width="56" height="16" fill="{muted}" fill-opacity=".3"/></g>'))
+    stroke(pen.rect(1052, 214, 118, 96), 1.4, 1.8)
+    write("AI agent", 1066, 254, 27, 600, rot=5, room=100)
+    write("here??", 1066, 288, 27, 600, rot=5)
+    for a, z in (((790, 154), (850, 210)), ((975, 226), (1030, 166)), ((848, 318), (790, 358)), ((1032, 368), (965, 314))):
         shaft, head = pen.arrow(a, z)
-        stroke(shaft, 1.6)
-        stroke(head, .6)
-    assert at < end - 2, f"sketch runs too long: {at:.0f}%"
+        stroke(shaft, 1.1)
+        stroke(head, .4)
+    end = round(at + 2)
+    assert end <= 46, f"sketch runs too long: {end}%"
+
+    sk = []
+    for item in queue:
+        if item[0] == "draw":
+            _, s, e, d, w = item
+            sk.append(tl.draw(s, e, d, ink, w, until=end))
+        elif item[0] == "write":
+            _, rot, x, y, chars = item
+            body = "".join(tl.fade(c_at, glyph, until=end) for c_at, glyph in chars)
+            sk.append(f'<g transform="rotate({rot} {x} {y})">{body}</g>' if rot else body)
+        else:
+            _, s, body = item
+            sk.append(tl.fade(s, body, until=end))
     b.append(f'<g class="sketch">{"".join(sk)}</g>')
 
-    # frame 2 (34-58%): the wena mark grows over the whole space, then settles as the hub
-    wh = 240
+    # frame 2: the wena mark fades in large over the sketch, holds, and fades away
+    wh = 220
     ww = wh * 694 / 436
-    ease = "animation-timing-function:cubic-bezier(.65,0,.35,1)"
+    ease = "animation-timing-function:cubic-bezier(.4,0,.2,1)"
     k = tl.rule(
-        f"0%,{end}%{{opacity:0;transform:scale(.15) rotate(-10deg);{ease}}}"
-        f"44%,50%{{opacity:1;transform:none;{ease}}}"
-        f"58%,{tl.HOLD}%{{opacity:1;transform:scale(.3)}}"
-        f"{tl.GONE}%,100%{{opacity:0;transform:scale(.3)}}"
+        f"0%,{end}%{{opacity:0;transform:scale(.92);{ease}}}"
+        f"{end + 9}%,{end + 15}%{{opacity:1;transform:none;{ease}}}"
+        f"{end + 22}%,100%{{opacity:0;transform:scale(1.03)}}"
     )
-    b.append(
-        f'<g class="logo {k}" style="transform-box:fill-box;transform-origin:center">'
-        f"{wena_mark(910 - ww / 2, 260 - wh / 2, wh, accent)}</g>"
-    )
+    b.append(f'<g class="logo {k}" style="transform-box:fill-box;transform-origin:center">{wena_mark(910 - ww / 2, 260 - wh / 2, wh, accent)}</g>')
 
-    # frame 3 (58%+): the hub connects into an application landscape
-    hub_l, hub_r = 910 - ww * .3 / 2 - 8, 910 + ww * .3 / 2 + 8
-    bw, bh = 130, 52
-    for i, (label, cx, cy) in enumerate(LANDSCAPE):
-        x1, x2 = (hub_l, cx + bw / 2) if cx < 910 else (hub_r, cx - bw / 2)
-        mx = (x1 + x2) / 2
-        b.append(tl.draw(58 + i * 1.5, 64 + i * 1.5, f"M{x1:.1f} 260C{mx:.1f} 260 {mx:.1f} {cy} {x2} {cy}", accent, 2))
-    for i, (label, cx, cy) in enumerate(LANDSCAPE):
-        x, y = cx - bw / 2, cy - bh / 2
-        ix, iy = x + bw - 24, y + 8
-        lw = text_width(label, 17, 500)
-        box = (
-            f'<rect x="{x}" y="{y}" width="{bw}" height="{bh}" rx="2" fill="{bg}" stroke="{ink}" stroke-width="1.75"/>'
-            f'<g stroke="{ink}" stroke-width="1.4"><rect x="{ix + 4}" y="{iy}" width="12" height="14" fill="none"/>'
-            f'<rect x="{ix}" y="{iy + 2.5}" width="7" height="3.5" fill="{bg}"/><rect x="{ix}" y="{iy + 8}" width="7" height="3.5" fill="{bg}"/></g>'
-            + text(label, cx - lw / 2, cy + 12, 17, 500, ink)
-        )
-        b.append(tl.appear(62 + i * 1.5, box))
+    # frame 3: the official diagram
+    t0 = end + 21
+    b.append(tl.fade(t0, text("APPLICATION COOPERATION VIEW", 636, 54, 14, 600, muted, tracking=2.2)))
+    for i, (kind, a, z) in enumerate(RELATIONS):
+        b.append(tl.fade(t0 + 6 + i * 1.2, relation(kind, COMPONENTS[a], COMPONENTS[z], ink, bg)))
+    for i, (label, (cx, cy)) in enumerate(COMPONENTS.items()):
+        b.append(tl.appear(t0 + 1 + i * .8, component(label, cx, cy, ink, bg)))
+    legend_y = 452
+    legend = (
+        relation("serving", (636 - BW / 2, legend_y), (690 + BW / 2, legend_y), muted, bg)
+        + text("serving", 702, legend_y + 5, 15, 500, muted)
+        + relation("flow", (790 - BW / 2, legend_y), (844 + BW / 2, legend_y), muted, bg)
+        + text("flow", 856, legend_y + 5, 15, 500, muted)
+    )
+    b.append(tl.fade(t0 + 14, legend))
+    assert t0 + 18 < tl.HOLD, "landscape starts too late"
 
     alt = (
         f"{' '.join(s for s, _ in HEADLINE)} {SUBLINE} "
-        "Animation in three frames: a hand-drawn napkin sketch fills the space, the wena logo grows over it, "
-        "then the logo settles as the hub of an application landscape: Portal, CRM, ERP, Data, Identity and Billing."
+        "Animation in three frames: a napkin sketch with handwritten notes (portal, CRM, ERP, billing, data, "
+        "'who owns this?', 'AI agent here??'), then the wena logo, then a clean ArchiMate application "
+        "cooperation view of Portal, CRM, ERP, Identity, Data and Billing with serving and flow relations."
     )
-    reduced = ".sketch{display:none}.logo{transform:scale(.3)!important}"
+    reduced = ".sketch,.logo{display:none}"
     return svg(W, H, "".join(b), alt, tl.style(reduced))
 
 
