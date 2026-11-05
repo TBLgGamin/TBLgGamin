@@ -516,22 +516,23 @@ def main() -> None:
             (OUT / f"project-{p['slug']}-{name}.svg").write_text(project(p, t), encoding="utf-8")
         for icon, label in LINKS:
             (OUT / f"link-{icon}-{name}.svg").write_text(link(icon, label, t), encoding="utf-8")
+    names = {}
     for f in sorted(OUT.glob("*.svg")):
-        print(f"{f.stat().st_size / 1024:6.1f} KB  {f.name}")
-    stamp_readme()
+        # GitHub redirects image URLs to raw.githubusercontent.com and drops any query string,
+        # so only a new file name makes browsers fetch a changed image
+        hashed = f.with_name(f"{f.stem}.{hashlib.sha256(f.read_bytes()).hexdigest()[:8]}.svg")
+        f.rename(hashed)
+        names[f.stem] = hashed.name
+        print(f"{hashed.stat().st_size / 1024:6.1f} KB  {hashed.name}")
+    stamp_readme(names)
 
 
-def stamp_readme() -> None:
-    """Browsers and GitHub's image proxy cache README images by URL, so a changed SVG under the
-    same name keeps showing the old one. Add a content hash to every asset URL in README.md."""
+def stamp_readme(names: dict[str, str]) -> None:
+    """Point every asset reference in README.md at the current hashed file name."""
     readme = ROOT.parent / "README.md"
-
-    def stamp(m: re.Match) -> str:
-        digest = hashlib.sha256((OUT / m.group(1)).read_bytes()).hexdigest()[:8]
-        return f"assets/{m.group(1)}?v={digest}"
-
     md = readme.read_text(encoding="utf-8")
-    readme.write_text(re.sub(r"assets/([\w-]+\.svg)(?:\?v=\w+)?", stamp, md), encoding="utf-8", newline="\n")
+    md = re.sub(r"assets/([a-z-]+)(?:\.[0-9a-f]{8})?\.svg(?:\?v=\w+)?", lambda m: f"assets/{names[m.group(1)]}", md)
+    readme.write_text(md, encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

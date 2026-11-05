@@ -1,22 +1,22 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.svg?v=73766b53">
-  <img alt="I connect people, processes and systems. IT consultant and developer, growing into solution architecture." src="assets/hero-light.svg?v=d5f5fca1" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.73766b53.svg">
+  <img alt="I connect people, processes and systems. IT consultant and developer, growing into solution architecture." src="assets/hero-light.d5f5fca1.svg" width="100%">
 </picture>
 
-<a href="https://wena.one"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/link-wena-dark.svg?v=49e0a385"><img alt="wena.one" src="assets/link-wena-light.svg?v=1e2b8db3" height="28"></picture></a>&emsp;&emsp;<a href="https://www.linkedin.com/in/wessel-van-der-vlugt-351213254/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/link-linkedin-dark.svg?v=61eca0a9"><img alt="LinkedIn" src="assets/link-linkedin-light.svg?v=9977dcfb" height="28"></picture></a>
+<a href="https://wena.one"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/link-wena-dark.49e0a385.svg"><img alt="wena.one" src="assets/link-wena-light.1e2b8db3.svg" height="28"></picture></a>&emsp;&emsp;<a href="https://www.linkedin.com/in/wessel-van-der-vlugt-351213254/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/link-linkedin-dark.61eca0a9.svg"><img alt="LinkedIn" src="assets/link-linkedin-light.9977dcfb.svg" height="28"></picture></a>
 
 <br><br>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/interests-dark.svg?v=3044a9d0">
-  <img alt="Interested in: human-agent interaction, application landscapes, enterprise architecture, AI and machine learning, reinforcement learning, embedded systems, sociology, change management." src="assets/interests-light.svg?v=5d506f03" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/interests-dark.3044a9d0.svg">
+  <img alt="Interested in: human-agent interaction, application landscapes, enterprise architecture, AI and machine learning, reinforcement learning, embedded systems, sociology, change management." src="assets/interests-light.5d506f03.svg" width="100%">
 </picture>
 
 <br><br>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/building-dark.svg?v=c0189378">
-  <img alt="Building" src="assets/building-light.svg?v=00cf0ca0" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/building-dark.c0189378.svg">
+  <img alt="Building" src="assets/building-light.00cf0ca0.svg" width="100%">
 </picture>
 
-<a href="https://mtgf.net"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-mtgf-dark.svg?v=96958837"><img alt="mtgf: card search for people and AI agents" src="assets/project-mtgf-light.svg?v=55ce6389" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/ordo"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-ordo-dark.svg?v=f58c0e8f"><img alt="ordo: a terminal where AI agents team up" src="assets/project-ordo-light.svg?v=3ff7cffd" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/piikey"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-piikey-dark.svg?v=fbd3a959"><img alt="piikey: keeps your data out of AI chats" src="assets/project-piikey-light.svg?v=4f31f103" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/pokeum"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-pokeum-dark.svg?v=fb31c79a"><img alt="pokeum: card recognition, fully self-hosted" src="assets/project-pokeum-light.svg?v=3e136983" width="23%"></picture></a>
+<a href="https://mtgf.net"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-mtgf-dark.96958837.svg"><img alt="mtgf: card search for people and AI agents" src="assets/project-mtgf-light.55ce6389.svg" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/ordo"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-ordo-dark.f58c0e8f.svg"><img alt="ordo: a terminal where AI agents team up" src="assets/project-ordo-light.3ff7cffd.svg" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/piikey"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-piikey-dark.fbd3a959.svg"><img alt="piikey: keeps your data out of AI chats" src="assets/project-piikey-light.4f31f103.svg" width="23%"></picture></a>&nbsp;<a href="https://github.com/TBLgGamin/pokeum"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/project-pokeum-dark.fb31c79a.svg"><img alt="pokeum: card recognition, fully self-hosted" src="assets/project-pokeum-light.3e136983.svg" width="23%"></picture></a>
