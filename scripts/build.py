@@ -12,6 +12,8 @@ CSS animation inside the SVG does play, and stops for visitors who prefer reduce
 from __future__ import annotations
 
 import base64
+import math
+import random
 import re
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -200,9 +202,83 @@ def arrow(x: float, y: float, s: float, stroke: str) -> str:
 # ---------------------------------------------------------------- hero (split: words left, animation right)
 
 
+def scribble_path(seed: int, cx: float, cy: float, rx: float, ry: float) -> str:
+    """A hand-drawn tangle: jittered loops joined by a smooth Catmull-Rom curve,
+    ending in a short tail to the right of the box."""
+    rng = random.Random(seed)
+    pts = [(cx - rx, cy + ry * .2)]
+    for i in range(22):
+        a = i * 2.35 + rng.uniform(-.5, .5)
+        r = rng.uniform(.35, 1)
+        drift = (i / 21 - .5) * rx * .5
+        pts.append((cx + drift + math.cos(a) * rx * r * .75, cy + math.sin(a) * ry * r * .8 + rng.uniform(-8, 8)))
+    pts.append((cx + rx * .85, cy + 6))
+    pts.append((cx + rx + 12, cy))
+    d = f"M{pts[0][0]:.1f} {pts[0][1]:.1f}"
+    for i in range(len(pts) - 1):
+        p0, p1, p2 = pts[max(i - 1, 0)], pts[i], pts[i + 1]
+        p3 = pts[min(i + 2, len(pts) - 1)]
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        d += f"C{c1[0]:.1f} {c1[1]:.1f} {c2[0]:.1f} {c2[1]:.1f} {p2[0]:.1f} {p2[1]:.1f}"
+    return d
+
+
+class ArchiMate:
+    """A few ArchiMate 3.2 notation shapes, drawn in one ink colour (colour carries no
+    meaning in ArchiMate). Square corners = structure, rounded corners = behaviour."""
+
+    H = 60
+
+    def __init__(self, tl: Timeline, t: dict) -> None:
+        self.tl, self.ink, self.bg = tl, t["ink"], t["bg"]
+
+    def element(self, kind: str, cx: float, cy: float, label: str, at: float, w: float = 164) -> str:
+        ink, bg, h = self.ink, self.bg, self.H
+        x, y = cx - w / 2, cy - h / 2
+        rx = 2 if kind == "component" else 14
+        ix, iy = x + w - 26, y + 9
+        if kind == "component":
+            icon = (
+                f'<rect x="{ix + 4}" y="{iy}" width="14" height="16" fill="none"/>'
+                f'<rect x="{ix}" y="{iy + 3}" width="8" height="4" fill="{bg}"/>'
+                f'<rect x="{ix}" y="{iy + 9.5}" width="8" height="4" fill="{bg}"/>'
+            )
+        elif kind == "service":
+            icon = f'<rect x="{ix - 2}" y="{iy + 3}" width="20" height="10" rx="5" fill="none"/>'
+        else:  # process
+            icon = f'<path fill="none" d="M{ix - 3} {iy + 5}h11v-4l8 7l-8 7v-4h-11z"/>'
+        lw = text_width(label, 17, 500)
+        fits(lw, w - 20, label)
+        body = (
+            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{rx}" fill="{bg}" stroke="{ink}" stroke-width="1.75"/>'
+            f'<g stroke="{ink}" stroke-width="1.5" stroke-linejoin="round">{icon}</g>'
+            + text(label, cx - lw / 2, cy + 14, 17, 500, ink)
+        )
+        return self.tl.appear(at, body)
+
+    def serving(self, x: float, y1: float, y2: float, at: float) -> str:
+        """Serving: solid line, open arrowhead."""
+        return self.tl.draw(at, at + 3, f"M{x} {y1}V{y2}", self.ink, 1.75) + self.tl.appear(
+            at + 3, f'<path fill="none" stroke="{self.ink}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M{x - 6} {y2 + 10}L{x} {y2}L{x + 6} {y2 + 10}"/>'
+        )
+
+    def realization(self, x: float, y1: float, y2: float, at: float) -> str:
+        """Realization: dashed line, hollow triangle."""
+        line = f'<path d="M{x} {y1}V{y2 + 11}" stroke="{self.ink}" stroke-width="1.75" stroke-dasharray="5 4"/>'
+        head = f'<path fill="{self.bg}" stroke="{self.ink}" stroke-width="1.75" stroke-linejoin="round" d="M{x} {y2}L{x - 7} {y2 + 11}H{x + 7}Z"/>'
+        return self.tl.appear(at, line + head)
+
+    def flow(self, x1: float, x2: float, y: float, at: float) -> str:
+        """Flow: dashed line, filled arrowhead."""
+        line = f'<path d="M{x1} {y}H{x2 - 9}" stroke="{self.ink}" stroke-width="1.75" stroke-dasharray="5 4"/>'
+        head = f'<path fill="{self.ink}" d="M{x2} {y}l-10 -5.5v11z"/>'
+        return self.tl.appear(at, line + head)
+
+
 def hero(t: dict) -> str:
     W, H = 1200, 520
-    ink, muted, accent = t["ink"], t["muted"], t["accent"]
+    muted = t["muted"]
     tl = Timeline()
     b = []
 
@@ -216,37 +292,29 @@ def hero(t: dict) -> str:
         + "</g>"
     )
 
-    # right: a messy question straightens into a solution, and a person starts using it
-    y = 260
-    A, B, C, D, P = (870, y), (970, y - 70), (970, y + 70), (1070, y), (1150, y)
+    # right: a wobbly scribble (the question) becomes an ArchiMate view (the design)
+    b.append(tl.appear(1, text("a question", 636, 170, 18, 500, muted)))
+    b.append(tl.draw(3, 34, scribble_path(seed=4, cx=715, cy=262, rx=80, ry=105), muted, 2.5))
+    b.append(tl.draw(36, 40, "M812 262H838", muted, 2))
+    b.append(tl.appear(40, f'<path fill="{muted}" d="M846 262l-10 -6v12z"/>'))
 
-    def label(s: str, cx: float, base: float, fill: str) -> str:
-        return text(s, cx - text_width(s, 18, 500) / 2, base, 18, 500, fill)
-
-    b.append(tl.appear(1, text("a question", 640, 180, 18, 500, muted)))
-    scribble = (
-        f"M640 {y}C660 200 720 210 700 250C680 300 640 270 670 230C700 190 750 230 730 270"
-        f"C715 300 760 300 775 270C785 252 800 {y} 820 {y}L{A[0] - 9} {y}"
-    )
-    b.append(tl.draw(3, 28, scribble, muted, 2.5))
-    for (p, q), (s, e) in zip(((A, B), (A, C), (B, D), (C, D)), ((30, 36), (32, 38), (36, 42), (38, 44))):
-        b.append(tl.draw(s, e, f"M{p[0]} {p[1]}L{q[0]} {q[1]}", ink))
-    for n, at in zip((A, B, C, D), (29, 35, 37, 43)):
-        b.append(tl.appear(at, f'<circle cx="{n[0]}" cy="{n[1]}" r="9" fill="{ink}"/>'))
-    b.append(tl.appear(45, label("a solution", B[0], C[1] + 60, muted)))
-
-    b.append(tl.draw(48, 54, f"M{D[0] + 9} {y}L{P[0] - 26} {y}", accent))
-    person = (
-        f'<circle cx="{P[0]}" cy="{y - 14}" r="10" fill="{ink}"/>'
-        f'<path fill="{ink}" d="M{P[0] - 20} {y + 22}a20 18 0 0 1 40 0z"/>'
-    )
-    b.append(tl.appear(54, person))
-    b.append(tl.appear(58, label("in use", P[0], y + 66, accent)))
-    b.append(tl.draw(60, 64, f"M{P[0] + 14} {y - 44}l7 7l13 -13", accent, 3))
+    am = ArchiMate(tl, t)
+    col, crm_x = 945, 1120
+    proc_y, svc_y, app_y = 120, 245, 370
+    b.append(am.element("component", col, app_y, "Portal", 41, w=140))
+    b.append(am.element("component", crm_x, app_y, "CRM", 43, w=140))
+    b.append(am.flow(col + 70, crm_x - 70, app_y, 46))
+    b.append(am.realization(col, app_y - 30, svc_y + 30, 49))
+    b.append(am.element("service", col, svc_y, "Request service", 54))
+    b.append(am.serving(col, svc_y - 30, proc_y + 30, 58))
+    b.append(am.element("process", col, proc_y, "Handle request", 62))
+    for label, y in (("BUSINESS", proc_y), ("APPLICATION", svc_y)):
+        b.append(tl.appear(65, text(label, 1190 - text_width(label, 13, 600, 2), y + 5, 13, 600, muted, tracking=2)))
 
     alt = (
         f"{' '.join(s for s, _ in HEADLINE)} {SUBLINE} "
-        "Animation: a tangled line, a question, straightens into a tidy connected structure, a solution, and a person starts using it."
+        "Animation: a wobbly scribble, a question, turns into an ArchiMate view: the Portal and CRM application "
+        "components, the Request service they realise, and the Handle request business process it serves."
     )
     return svg(W, H, "".join(b), alt, tl.style())
 
