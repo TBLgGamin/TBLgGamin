@@ -13,6 +13,7 @@ import base64
 import random
 import re
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
@@ -24,8 +25,8 @@ SRC = ROOT / "src"
 OUT = ROOT.parent / "assets"
 
 THEMES = {
-    "light": {"ink": "#0A0A0A", "muted": "#737373", "line2": "#D4D4D4", "accent": "#6F49B1"},
-    "dark": {"ink": "#FAFAFA", "muted": "#A1A1A1", "line2": "#404040", "accent": "#D6C9F9"},
+    "light": {"ink": "#0A0A0A", "muted": "#737373", "line2": "#D4D4D4", "accent": "#6F49B1", "on_accent": "#FFFFFF"},
+    "dark": {"ink": "#FAFAFA", "muted": "#A1A1A1", "line2": "#3A3A3A", "accent": "#D6C9F9", "on_accent": "#0A0A0A"},
 }
 
 # ---------------------------------------------------------------- type
@@ -147,7 +148,7 @@ STYLE = """
 def svg(w: int, h: int, body: str, title: str) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img">'
-        f"<title>{title}</title>{STYLE}{body}</svg>\n"
+        f"<title>{escape(title)}</title>{STYLE}{body}</svg>\n"
     )
 
 
@@ -193,7 +194,7 @@ def hero(t: dict) -> str:
     b.append(
         '<g class="rise" style="--o:.15s">'
         + text("WESSEL VAN DER VLUGT", x0, 188, 15, 600, muted, tracking=2.4)
-        + text("·  SOLUTIONS ARCHITECT", x0 + text_width("WESSEL VAN DER VLUGT", 15, 600, 2.4) + 12, 188, 15, 600, accent, tracking=2.4)
+        + text("·  IT CONSULTANT & ARCHITECT", x0 + text_width("WESSEL VAN DER VLUGT", 15, 600, 2.4) + 12, 188, 15, 600, accent, tracking=2.4)
         + "</g>"
     )
     head = [("Mapping where people", ink), ("meet systems.", ink), ("Now systems act too.", accent)]
@@ -236,51 +237,131 @@ def hero(t: dict) -> str:
     b.append(text("agent", ag[0], ag[1] + ar + 28, 17, 600, accent, tracking=.5, anchor="middle"))
     b.append(text("asks first", 752, 389, 15, 500, accent, tracking=.3, anchor="middle"))
 
-    return svg(W, H, "".join(b), "Wessel van der Vlugt, solutions architect. Mapping where people meet systems. Now systems act too.")
+    return svg(W, H, "".join(b), "Wessel van der Vlugt, IT consultant and solution architecture. Mapping where people meet systems. Now systems act too.")
 
 
-# ---------------------------------------------------------------- side projects on the autonomy axis
+# ---------------------------------------------------------------- project cards
 
-# Left to right: how much of the work the system does on its own.
+# GitHub shows README SVGs as <img>, so links inside an SVG never work: every card and
+# button is its own image, wrapped in a link in README.md.
 PROJECTS = [
-    ("pokeum", "pokeum", "it recognises the card, you decide"),
-    ("mtgf", "mtgf", "people and agents share one search"),
-    ("piikey", "piikey", "keeps your data out of AI chats"),
-    ("ordo", "ordo", "agents coordinate, you steer"),
+    {
+        "slug": "mtgf",
+        "url": "mtgf.net",
+        "desc": "Magic: The Gathering search, deck builder and 3D playtest. Search in plain language; AI agents can use it through MCP.",
+        "tags": "NUXT · CLICKHOUSE · ONNX · MCP",
+    },
+    {
+        "slug": "ordo",
+        "url": "ordo.wena.one",
+        "desc": "Tiling terminal for running many shells and AI agents side by side, with a shared channel so the agents can coordinate.",
+        "tags": "TYPESCRIPT · BUN · MCP",
+    },
+    {
+        "slug": "piikey",
+        "url": "github.com/TBLgGamin/piikey",
+        "desc": "Finds your personal data on your PC and masks it before it reaches AI chats. Runs locally, in the background.",
+        "tags": "RUST · WINUI 3 · DIRECTML",
+    },
+    {
+        "slug": "pokeum",
+        "url": "github.com/TBLgGamin/pokeum",
+        "desc": "Point your phone at a Pokémon card and get the exact printing. Self-hosted, no account, nothing sent to a cloud.",
+        "tags": "PYTHON · DINOV2 · VUE PWA",
+    },
 ]
 
 
-def work(t: dict) -> str:
-    W, H = 1200, 300
-    ink, muted, accent = t["ink"], t["muted"], t["accent"]
-    ax1, ax2, y = 110, 1090, 150
-    xs = [290, 520, 750, 960]
-    L = 64
+def arrow(x: float, y: float, s: float, stroke: str, w: float = 2) -> str:
+    """↗ with (x, y) the bottom-left corner of an s×s box."""
+    return (
+        f'<path fill="none" stroke="{stroke}" stroke-width="{w}" stroke-linecap="round" stroke-linejoin="round" '
+        f'd="M{x} {y}L{x + s} {y - s}M{x + s * 0.3:.1f} {y - s}H{x + s}V{y - s * 0.3:.1f}"/>'
+    )
+
+
+def logo_tile(slug: str, x: float, y: float, size: float, accent: str) -> str:
+    out = f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="{size * .26:.0f}" fill="{accent}" fill-opacity=".14"/>'
+    m = size * .64
+    mx, my = x + (size - m) / 2, y + (size - m) / 2
+    if slug in ("mtgf", "ordo"):
+        return out + png_mark(slug, mx, my, m, accent)
+    return out + vector_mark(POKEUM if slug == "pokeum" else PIIKEY, mx, my, m, accent)
+
+
+def card(p: dict, t: dict) -> str:
+    W, H = 600, 300
+    ink, muted, line, accent = t["ink"], t["muted"], t["line2"], t["accent"]
     b = [
         "<defs>"
-        f'<linearGradient id="axis" x1="{ax1}" x2="{ax2}" gradientUnits="userSpaceOnUse">'
-        f'<stop offset="0" stop-color="{accent}" stop-opacity=".15"/><stop offset="1" stop-color="{accent}"/></linearGradient>'
-        "</defs>",
-        f'<line x1="{ax1}" y1="{y}" x2="{ax2}" y2="{y}" stroke="url(#axis)" stroke-width="3" stroke-linecap="round"/>',
-        person(56, y, ink, r=28),
-        agent(1144, y, accent, r=28),
-        text("people do the work", 28, 100, 15, 600, muted, tracking=.3),
-        text("systems do the work", 1172, 100, 15, 600, accent, tracking=.3, anchor="end"),
+        f'<radialGradient id="g" cx="{W}" cy="0" r="380" gradientUnits="userSpaceOnUse">'
+        f'<stop offset="0" stop-color="{accent}" stop-opacity=".14"/><stop offset="1" stop-color="{accent}" stop-opacity="0"/></radialGradient>'
+        "</defs>"
+        f'<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="20" fill="url(#g)" stroke="{line}" stroke-width="1.5"/>',
+        logo_tile(p["slug"], 36, 36, 76, accent),
+        text(p["slug"], 136, 72, 34, 700, ink, tracking=-.8),
+        text(p["url"], 136, 104, 18, 500, accent),
+        # corner affordance: the whole card is a link
+        f'<circle cx="{W - 56}" cy="62" r="22" fill="none" stroke="{line}" stroke-width="1.5"/>',
+        arrow(W - 62, 68, 12, ink),
     ]
-    for (slug, name, phrase), cx in zip(PROJECTS, xs):
-        ly = 34
-        if slug in ("mtgf", "ordo"):
-            b.append(png_mark(slug, cx - L / 2, ly, L, ink))
-        else:
-            b.append(vector_mark(POKEUM if slug == "pokeum" else PIIKEY, cx - L / 2, ly, L, ink))
-        b.append(f'<line x1="{cx}" y1="{ly + L + 8}" x2="{cx}" y2="{y - 10}" stroke="{ink}" stroke-opacity=".25" stroke-width="1.5"/>')
-        b.append(f'<circle cx="{cx}" cy="{y}" r="6" fill="{accent}"/>')
-        b.append(text(name, cx, y + 52, 27, 700, ink, tracking=-.4, anchor="middle"))
-        for i, s in enumerate(wrap(phrase, 20, 400, 215)):
-            b.append(text(s, cx, y + 84 + i * 27, 20, 400, muted, anchor="middle"))
-    alt = "Side projects on an axis from people doing the work to systems doing the work: " + "; ".join(
-        f"{n}: {p}" for _, n, p in PROJECTS
+    for i, s in enumerate(wrap(p["desc"], 21, 400, W - 72)[:3]):
+        b.append(text(s, 36, 168 + i * 31, 21, 400, ink))
+    b.append(text(p["tags"], 36, 268, 13, 600, muted, tracking=2.2))
+    return svg(W, H, "".join(b), f"{p['slug']} ({p['url']}): {p['desc']}")
+
+
+# ---------------------------------------------------------------- link buttons
+
+
+def linkedin_icon(x: float, y: float, s: float, bg: str, fg: str) -> str:
+    return (
+        f'<rect x="{x}" y="{y}" width="{s}" height="{s}" rx="{s * .18:.1f}" fill="{fg}"/>'
+        + text("in", x + s / 2, y + s * .8, s * .78, 700, bg, tracking=-.5, anchor="middle")
     )
+
+
+def button(label: str, icon: str, t: dict) -> str:
+    h, pad, ic, gap = 44, 18, 20, 10
+    fg, bg = t["on_accent"], t["accent"]
+    tw = text_width(label, 17, 600)
+    iw = ic * 694 / 436 if icon == "wena" else ic
+    w = int(pad + iw + gap + tw + pad)
+    icon_svg = wena_mark(pad, (h - ic) / 2, ic, fg) if icon == "wena" else linkedin_icon(pad, (h - ic) / 2, ic, bg, fg)
+    b = f'<rect width="{w}" height="{h}" rx="10" fill="{bg}"/>' + icon_svg + text(label, pad + iw + gap, 28.5, 17, 600, fg)
+    return svg(w, h, b, label)
+
+
+# ---------------------------------------------------------------- competences
+
+COMPETENCES = [
+    ("BUILD", ["Software development", "System architecture", "AI & ML", "RPA & AI workflows", "DevOps"]),
+    ("PEOPLE", ["Stakeholder management", "Change management", "Training & adoption", "Knowledge management"]),
+    ("EXPLORING", ["Human–agent interaction", "Reinforcement learning", "Embedded systems", "Sociology"]),
+]
+
+
+def competences(t: dict) -> str:
+    W = 1200
+    ink, muted, line, accent = t["ink"], t["muted"], t["line2"], t["accent"]
+    x0, h, gap, fs, row = 170, 44, 12, 18, 64
+    b = []
+    for r, (label, chips) in enumerate(COMPETENCES):
+        y = r * row
+        b.append(text(label, 0, y + 28, 14, 600, accent if label == "EXPLORING" else muted, tracking=2.4))
+        x = x0
+        for c in chips:
+            w = text_width(c, fs, 500) + 36
+            dashed = ' stroke-dasharray="5 5"' if label == "EXPLORING" else ""
+            stroke = accent if label == "EXPLORING" else line
+            b.append(
+                f'<rect x="{x + .75:.1f}" y="{y + .75}" width="{w - 1.5:.1f}" height="{h - 1.5}" rx="{h / 2}" fill="none" stroke="{stroke}" stroke-width="1.5"{dashed}/>'
+                + text(c, x + 18, y + 28.5, fs, 500, ink)
+            )
+            x += w + gap
+            assert x <= W + gap, f"row {label} overflows: {x:.0f}"
+    H = len(COMPETENCES) * row - (row - h)
+    alt = "Competences. " + " ".join(f"{l.title()}: {', '.join(c)}." for l, c in COMPETENCES)
     return svg(W, H, "".join(b), alt)
 
 
@@ -293,7 +374,11 @@ def main() -> None:
         old.unlink()
     for name, t in THEMES.items():
         (OUT / f"hero-{name}.svg").write_text(hero(t), encoding="utf-8")
-        (OUT / f"work-{name}.svg").write_text(work(t), encoding="utf-8")
+        for p in PROJECTS:
+            (OUT / f"card-{p['slug']}-{name}.svg").write_text(card(p, t), encoding="utf-8")
+        (OUT / f"competences-{name}.svg").write_text(competences(t), encoding="utf-8")
+        (OUT / f"btn-wena-{name}.svg").write_text(button("wena.one", "wena", t), encoding="utf-8")
+        (OUT / f"btn-linkedin-{name}.svg").write_text(button("LinkedIn", "linkedin", t), encoding="utf-8")
     for f in sorted(OUT.glob("*.svg")):
         print(f"{f.stat().st_size / 1024:6.1f} KB  {f.name}")
 
